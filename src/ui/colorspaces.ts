@@ -65,6 +65,8 @@ export const OUTPUT_GROUPS: CSGroup[] = [
   },
   { label: 'Standard', options: ['Linear'] },
   { label: 'HDR', options: ['Rec.2100-PQ', 'Rec.2100-HLG'] },
+  // An inverted display LUT outputs camera log, so these belong here too.
+  { label: 'Camera', options: INPUT_GROUPS[0].options },
 ];
 
 export const EXPOSURE_STOPS: { value: string; label: string }[] = [

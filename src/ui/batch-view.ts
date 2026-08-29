@@ -11,11 +11,17 @@ import {
   makeEntry,
   outputPath,
   renderBatch,
+  stamp,
   worstLevel,
 } from '../batch/batch.js';
 import { DEFAULT_TEMPLATE, TEMPLATE_TOKENS } from '../core/naming.js';
 import { type LookKind } from '../core/naming.js';
 import { $, download, esc, fmtSize, setVal, toast, today, val } from './dom.js';
+import { buildLookSheet, type LookSheetTile } from '../batch/looksheet.js';
+import { renderThumbnail } from '../render/offscreen.js';
+import { CHARTS, type ChartId, renderChart } from '../render/charts.js';
+import { stillSource } from './preview-view.js';
+import { encodingForColorSpace, type EncodingId } from '../render/transfer.js';
 import { populateCS, populateExposure } from './colorspaces.js';
 
 const PREFS_KEY = 'lut-editor/batch-prefs';
@@ -230,6 +236,80 @@ function exportZip(): void {
   toast(`Exported ${files.size} file${files.size === 1 ? '' : 's'}`);
 }
 
+/** Nearest-neighbour fit of a still into the thumbnail, preserving aspect. */
+function resampleStill(
+  still: { linear: Float32Array; w: number; h: number },
+  w: number,
+  h: number,
+): Float32Array {
+  const out = new Float32Array(w * h * 3);
+  const scale = Math.max(w / still.w, h / still.h);
+  const dw = still.w * scale;
+  const dh = still.h * scale;
+  const ox = (dw - w) / 2;
+  const oy = (dh - h) / 2;
+
+  for (let y = 0; y < h; y++) {
+    const sy = Math.min(still.h - 1, Math.max(0, Math.floor((y + oy) / scale)));
+    for (let x = 0; x < w; x++) {
+      const sx = Math.min(still.w - 1, Math.max(0, Math.floor((x + ox) / scale)));
+      const src = (sy * still.w + sx) * 3;
+      const dst = (y * w + x) * 3;
+      out[dst] = still.linear[src];
+      out[dst + 1] = still.linear[src + 1];
+      out[dst + 2] = still.linear[src + 2];
+    }
+  }
+  return out;
+}
+
+function exportLookSheet(): void {
+  const included = entries.filter((e) => e.included);
+  if (!included.length) {
+    toast('Nothing selected for the look sheet');
+    return;
+  }
+
+  const s = shared();
+  // Preview each look through the encoding its declared input space implies.
+  const encoding: EncodingId = encodingForColorSpace(s.inputCS) ?? 'linear';
+
+  const W = 480;
+  const H = 270;
+
+  // A photographic still separates looks far better than a patch chart; fall
+  // back to skin tones, which at least move visibly under a grade.
+  const still = stillSource();
+  const chart: ChartId = 'skin';
+  let linear: Float32Array;
+  let label: string;
+
+  if (still) {
+    linear = resampleStill(still, W, H);
+    label = still.name;
+  } else {
+    linear = renderChart(chart, W, H);
+    label = CHARTS.find((c) => c.id === chart)?.label ?? chart;
+  }
+
+  const tiles: LookSheetTile[] = [];
+  for (const entry of included) {
+    stamp(entry, s);
+    const image = renderThumbnail(entry.lut, { linear }, encoding, W, H);
+    if (!image) {
+      toast('The look sheet needs WebGL2, which this browser did not provide');
+      return;
+    }
+    tiles.push({ entry, image });
+  }
+  const html = buildLookSheet(tiles, s, label);
+  const stem = val('bProject')
+    ? val('bProject').replace(/[^A-Za-z0-9]+/g, '')
+    : 'LookSheet';
+  download(`${stem}_LookSheet.html`, html, 'text/html');
+  toast(`Look sheet with ${tiles.length} look${tiles.length === 1 ? '' : 's'}`);
+}
+
 export function init(
   onEmptyCallback: () => void,
   onSelectCallback: (entry: BatchEntry | null) => void,
@@ -277,6 +357,7 @@ export function init(
 
   $('bClear').addEventListener('click', clear);
   $('bExport').addEventListener('click', exportZip);
+  $('bLookSheet').addEventListener('click', exportLookSheet);
 }
 
 function syncFoldersToggle(): void {

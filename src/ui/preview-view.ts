@@ -12,6 +12,7 @@ import { type Lut } from '../core/lut.js';
 import { PreviewRenderer, type Interpolation } from '../render/preview.js';
 import { CHARTS, type ChartId, renderChart } from '../render/charts.js';
 import { drawVectorscope, drawWaveform } from '../render/scopes.js';
+import { CubeView } from '../render/cube3d.js';
 import {
   ENCODINGS,
   ENCODING_LIST,
@@ -30,6 +31,8 @@ interface DroppedStill {
 
 let renderer: PreviewRenderer | null = null;
 let rendererFailed = false;
+let cube: CubeView | null = null;
+let cubeFailed = false;
 let lut: Lut | null = null;
 let still: DroppedStill | null = null;
 let sourceId: ChartId | 'still' = 'checker';
@@ -218,7 +221,22 @@ export function hasStill(): boolean {
   return still !== null;
 }
 
-type Tab = 'curve' | 'image' | 'scopes';
+/** The dropped still as scene-linear RGB, for the look sheet to reuse. */
+export function stillSource(): { linear: Float32Array; w: number; h: number; name: string } | null {
+  return still;
+}
+
+type Tab = 'curve' | 'image' | 'scopes' | 'cube';
+
+function ensureCube(): CubeView | null {
+  if (cube || cubeFailed) return cube;
+  try {
+    cube = new CubeView($<HTMLCanvasElement>('cubeCanvas'));
+  } catch {
+    cubeFailed = true;
+  }
+  return cube;
+}
 let activeTab: Tab = 'curve';
 
 function drawScopes(): void {
@@ -252,14 +270,31 @@ function showTab(which: Tab): void {
   $('tabCurve').classList.toggle('active', which === 'curve');
   $('tabImage').classList.toggle('active', which === 'image');
   $('tabScopes').classList.toggle('active', which === 'scopes');
+  $('tabCube').classList.toggle('active', which === 'cube');
 
   $<HTMLCanvasElement>('vizCanvas').hidden = which !== 'curve';
   $('scopeStack').hidden = which !== 'scopes';
-  $('previewControls').hidden = which === 'curve';
+  $<HTMLCanvasElement>('cubeCanvas').hidden = which !== 'cube';
+  // The cube plots the LUT itself; the source and encoding controls don't
+  // apply to it.
+  $('previewControls').hidden = which === 'curve' || which === 'cube';
 
   if (which === 'curve') {
     canvas().hidden = true;
     $('previewError').hidden = true;
+    return;
+  }
+
+  if (which === 'cube') {
+    canvas().hidden = true;
+    $('previewError').hidden = true;
+    const c = ensureCube();
+    if (c) {
+      c.setLut(lut);
+      // The canvas has no size until the browser has laid out the newly
+      // revealed element, so draw on the next frame rather than this one.
+      requestAnimationFrame(() => requestAnimationFrame(() => c.draw()));
+    }
     return;
   }
 
@@ -280,6 +315,14 @@ export function showImageTab(): void {
 
 export function redraw(): void {
   if (activeTab === 'curve') return;
+  if (activeTab === 'cube') {
+    const c = ensureCube();
+    if (c) {
+      c.setLut(lut);
+      requestAnimationFrame(() => c.draw());
+    }
+    return;
+  }
   if (activeTab === 'scopes') drawScopes();
   else refreshSource();
 }
@@ -310,6 +353,7 @@ export function init(): void {
   $('tabCurve').addEventListener('click', () => showTab('curve'));
   $('tabImage').addEventListener('click', () => showTab('image'));
   $('tabScopes').addEventListener('click', () => showTab('scopes'));
+  $('tabCube').addEventListener('click', () => showTab('cube'));
 
   sourceSel.addEventListener('change', () => {
     sourceId = sourceSel.value as ChartId | 'still';

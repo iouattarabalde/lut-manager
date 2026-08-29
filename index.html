@@ -30,11 +30,13 @@
         <button class="viz-tab active" id="tabCurve" type="button">Curve</button>
         <button class="viz-tab" id="tabImage" type="button">Image</button>
         <button class="viz-tab" id="tabScopes" type="button">Scopes</button>
+        <button class="viz-tab" id="tabCube" type="button">Cube</button>
       </div>
 
       <div class="viz-stage">
         <canvas id="vizCanvas"></canvas>
         <canvas id="previewCanvas" hidden></canvas>
+        <canvas id="cubeCanvas" hidden></canvas>
         <div class="scope-stack" id="scopeStack" hidden>
           <canvas id="waveformCanvas"></canvas>
           <canvas id="vectorCanvas"></canvas>
@@ -187,6 +189,7 @@
 
       <div style="display:flex;gap:10px;">
         <button class="btn btn-ghost" id="bClear">↺ Clear queue</button>
+        <button class="btn btn-ghost" id="bLookSheet">◫ Look sheet</button>
         <button class="btn btn-primary" id="bExport">↓ Export .zip</button>
       </div>
 
@@ -260,6 +263,77 @@
         </div>
       </div>
 
+
+      <!-- 03 Operations -->
+      <div class="section">
+        <div class="section-head">
+          <span class="section-num">03</span>
+          <span class="section-title">Operations</span>
+          <span class="section-key" id="opsStatus">data unchanged</span>
+        </div>
+
+        <div class="ops-banner" id="opsBanner" hidden></div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="field">
+            <label>Resample <span class="lkey">// cube size</span></label>
+            <select id="opResample">
+              <option value="">Keep original size</option>
+              <option value="17">17 — LUT boxes, camera monitor</option>
+              <option value="33">33 — standard</option>
+              <option value="65">65 — high precision</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Clamp <span class="lkey">// output range</span></label>
+            <select id="opClamp">
+              <option value="none">No clamp</option>
+              <option value="unit">Legal 0.0 – 1.0</option>
+              <option value="legal">Broadcast legal (64–940)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field" style="margin-top:4px;">
+          <label>Chain <span class="lkey">// bake a second LUT</span></label>
+          <div class="ops-chain">
+            <label class="ops-chain-drop" for="opChainInput" id="opChainLabel">
+              <input type="file" id="opChainInput" accept=".cube">
+              <span id="opChainName">Drop or click to add a second .cube</span>
+            </label>
+            <button class="ops-chain-clear" id="opChainClear" type="button" hidden>✕</button>
+          </div>
+          <select id="opChainOrder" style="margin-top:6px;" hidden></select>
+        </div>
+
+        <div class="ops-toggles">
+          <label class="toggle-label" id="opInvertLabel" for="opInvert">
+            <input type="checkbox" id="opInvert">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span class="toggle-text">Invert</span>
+          </label>
+          <label class="toggle-label" id="opTo1DLabel" for="opTo1D">
+            <input type="checkbox" id="opTo1D">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span class="toggle-text">Extract 1D</span>
+          </label>
+        </div>
+
+        <div class="ops-readout" id="opsReadout" hidden></div>
+      </div>
+
+
+      <!-- 04 Analysis -->
+      <div class="section">
+        <div class="section-head">
+          <span class="section-num">04</span>
+          <span class="section-title">Analysis</span>
+          <span class="section-key" id="analysisSubject">—</span>
+        </div>
+        <div class="metrics" id="metrics"></div>
+        <div class="checks" id="checks"></div>
+      </div>
+
       <!-- Preview -->
       <div class="preview-wrap">
         <div class="preview-header">
@@ -284,9 +358,15 @@
         <input type="text" id="fieldFilename" placeholder="output_edited.cube" disabled>
       </div>
 
-      <div style="display:flex;gap:10px;">
+      <div style="display:flex;gap:10px;align-items:stretch;">
         <button class="btn btn-ghost" id="btnReset">↺ Reset</button>
-        <button class="btn btn-primary" id="btnDownload">↓ Download .cube</button>
+        <select class="btn-format" id="exportFormat">
+          <option value="cube">.cube</option>
+          <option value="3dl">.3dl — Lustre / Flame</option>
+          <option value="csp">.csp — Cineon Space</option>
+          <option value="clf">.clf — ACES</option>
+        </select>
+        <button class="btn btn-primary" id="btnDownload">↓ Download</button>
       </div>
 
     </div>

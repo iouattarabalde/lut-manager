@@ -47,6 +47,53 @@ manufacturer's published 18% grey code value in `test/transfer.test.ts`.
 
 The Scopes tab shows an RGB-overlay waveform and a vectorscope of the **graded** result.
 
+One caveat: the LUT's output is written straight to an sRGB canvas, so for a Rec.709 gamma 2.4
+output LUT there is a small gamma mismatch against a true 2.4 monitor. This is for judging a
+LUT, not for final QC on a calibrated display.
+
+**Keyboard:** `1`–`4` switch tabs, `d` downloads, `Esc` clears. The interface follows your
+system light/dark setting.
+
+## Operations
+
+Staged transforms, kept separate from the header fields because the two make
+opposite promises: header edits return the data table byte-for-byte, operations rewrite it.
+Whenever any operation is active the panel says so.
+
+- **Resample** to 17 / 33 / 65 with tetrahedral interpolation, reporting the worst and mean
+  deviation from the original so you can tell whether a downsample is safe for a LUT box.
+- **Chain** a second `.cube` to bake a trim onto a show LUT. The direction selector spells out
+  both LUTs by name, since this is the easiest thing here to get backwards.
+- **Clamp** to 0–1 or to broadcast-legal (64–940 in 10-bit), reporting what fraction moved.
+- **Invert** (approximate). 3D inversion is ill-posed — a LUT that clips maps many inputs to
+  one output — so this reports the worst round-trip error and warns explicitly when the source
+  is non-injective rather than pretending the result is exact.
+- **Extract 1D** at 1024 points, exact only when the source does no cross-channel work.
+
+Operations that change the transform's direction rewrite the color space fields, so an
+inverted LogC→Rec.709 LUT ships declaring Rec.709→LogC rather than the original direction.
+
+### Export formats
+
+`.cube` (1D and 3D), `.3dl` (Lustre / Flame), `.csp` (Cineon Space), and ACES `.clf`.
+
+Sample ordering differs between them — `.cube` and `.csp` vary red fastest, `.3dl` and `.clf`
+vary blue fastest. Getting that backwards produces a file that loads without complaint and
+grades completely wrong, so each writer's ordering is asserted in `test/exporters.test.ts`.
+
+## Analysis
+
+A readout of black, white and mid points, contrast slope at mid, clipped fractions, maximum
+deviation from identity, neutral monotonicity, and whether the LUT is genuinely 3D or
+reducible to 1D — alongside the same checks batch mode runs.
+
+The **Cube** tab plots the LUT's output positions in RGB space as an orbitable point cloud
+inside a wireframe of the input domain. Gamut warping, clipping (points pinned flat against a
+face) and channel inversions read as shape here in a way no 1D curve shows.
+
+Loading a second LUT into **Chain** also overlays its neutral response on the curve, dashed,
+for comparison.
+
 ## Batch mode
 
 Drop several `.cube` files at once to switch into batch mode — the "shipping a look package"
@@ -68,6 +115,12 @@ workflow:
   can be excluded before export.
 
 Author, project and the naming template are remembered between sessions.
+
+**Look sheet** exports a self-contained HTML contact sheet — every LUT in the queue applied to
+the same reference frame, with its metadata and any flags beneath. It uses your dropped still
+if there is one, otherwise the skin-tone chart, since patch charts make looks hard to tell
+apart. Something to send with a package so the people receiving it can see what they were
+given without opening Resolve.
 
 > **Note on the exposure token.** The `resolve-naming-conventions` skill shows `E+00` in its
 > LUT-file row (sign after the `E`, zero-padded). The form implemented here — `+E1stop`,
@@ -104,19 +157,25 @@ Pushes to `main` deploy to GitHub Pages via `.github/workflows/deploy.yml`.
 ## Layout
 
 ```
-src/core/lut.ts        canonical in-memory LUT model, shared by everything
-src/core/sample.ts     CPU trilinear and tetrahedral sampling
-src/core/analyze.ts    delivery QC metrics and checks
-src/core/naming.ts     filename templates, ColorLibrary tokens and folders
-src/format/cube.ts     .cube reader and writer (1D and 3D)
-src/batch/batch.ts     batch queue, stamping and rendering
-src/render/preview.ts  WebGL2 image preview
-src/render/transfer.ts camera log and display transfer functions
-src/render/charts.ts   procedural reference charts
-src/render/scopes.ts   waveform and vectorscope
-src/render/curve.ts    neutral-axis plot
-src/ui/                shared DOM helpers, color space lists, panels
-src/main.ts            mode routing and single-file editor
+src/core/lut.ts          canonical in-memory LUT model, shared by everything
+src/core/sample.ts       CPU trilinear and tetrahedral sampling
+src/core/ops.ts          resample, chain, clamp, extract 1D, invert
+src/core/analyze.ts      delivery QC metrics and checks
+src/core/naming.ts       filename templates, ColorLibrary tokens and folders
+src/format/cube.ts       .cube reader and writer (1D and 3D)
+src/format/lustre3dl.ts  .3dl export      (blue fastest)
+src/format/csp.ts        .csp export      (red fastest)
+src/format/clf.ts        ACES .clf export (blue fastest)
+src/batch/batch.ts       batch queue, stamping and rendering
+src/batch/looksheet.ts   HTML contact sheet
+src/render/preview.ts    WebGL2 image preview
+src/render/cube3d.ts     WebGL2 3D cube viewer
+src/render/transfer.ts   camera log and display transfer functions
+src/render/charts.ts     procedural reference charts
+src/render/scopes.ts     waveform and vectorscope
+src/render/curve.ts      neutral-axis plot
+src/ui/                  shared DOM helpers, color space lists, panels
+src/main.ts              mode routing and single-file editor
 ```
 
 The canonical model keeps both parsed samples (for plotting and analysis) and the original
@@ -127,7 +186,14 @@ data rows (for lossless writing); see the comments in `src/core/lut.ts`.
 v1 was a single-file HTML/JS artifact deployed on Netlify Drop, migrated to GitHub Pages on
 2026-08-25. v2 rebuilt it on Vite with a shared LUT model, added 1D support, lossless header
 passthrough, file validation, and offline support, then added batch mode with delivery QC and
-ColorLibrary naming, and a GPU image preview with scopes. The v1 source is in the git history.
+ColorLibrary naming, a GPU image preview with scopes, LUT operations with multi-format export,
+and analysis with a 3D cube viewer. The v1 source is in the git history.
+
+## Not included
+
+**DCTL export.** Resolve's DCTL LUT mechanism can't be verified from here, and an export that
+silently fails to compile on set is worse than no export. Happy to add it if you can test the
+output in Resolve.
 
 ## Verifying the shader
 

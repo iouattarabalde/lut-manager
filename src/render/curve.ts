@@ -17,6 +17,8 @@ const CHANNELS = [
 export class CurveView {
   private ctx: CanvasRenderingContext2D;
   private lut: Lut | null = null;
+  /** Optional second LUT, drawn as a dashed overlay for comparison. */
+  private compare: { lut: Lut; label: string } | null = null;
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d');
@@ -27,6 +29,11 @@ export class CurveView {
 
   setLut(lut: Lut | null): void {
     this.lut = lut;
+    this.draw();
+  }
+
+  setCompare(lut: Lut | null, label = ''): void {
+    this.compare = lut ? { lut, label } : null;
     this.draw();
   }
 

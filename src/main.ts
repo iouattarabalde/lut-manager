@@ -15,6 +15,11 @@ import { $, download, esc, fmtSize, setVal, toast, today, val } from './ui/dom.j
 import { populateCS, populateExposure } from './ui/colorspaces.js';
 import * as batch from './ui/batch-view.js';
 import * as preview from './ui/preview-view.js';
+import * as ops from './ui/ops-view.js';
+import * as analysis from './ui/analysis-view.js';
+import { write3dl } from './format/lustre3dl.js';
+import { writeCsp } from './format/csp.js';
+import { writeClf } from './format/clf.js';
 
 let lut: Lut | null = null;
 let srcFileName = '';
@@ -78,10 +83,10 @@ async function loadFile(file: File): Promise<void> {
   $('emptyState').style.display = 'none';
   $('editor').classList.add('show');
 
+  ops.setSource(parsed);
   syncFilename();
   updatePreview();
   showViz();
-  preview.setLut(parsed);
 }
 
 function applyMetaToFields(l: Lut): void {
@@ -187,8 +192,10 @@ function collectMeta(l: Lut): void {
 function updatePreview(): void {
   if (!lut) return;
   collectMeta(lut);
+  const shown = ops.outputLut() ?? lut;
+  if (shown !== lut) shown.meta = { ...lut.meta };
   // Preview the header only: everything up to the first data row.
-  const full = writeCube(lut).split(/\r?\n/);
+  const full = writeCube(shown).split(/\r?\n/);
   const firstData = full.findIndex((l) => /^[-+.\d]/.test(l) && !/^[A-Z]/i.test(l));
   const header = full.slice(0, firstData === -1 ? full.length : firstData);
 
@@ -274,6 +281,8 @@ function clearAll(): void {
     return;
   }
   lut = null;
+  ops.setSource(null);
+  ops.reset();
   srcFileName = '';
   $('filePill').classList.remove('show');
   $('editor').classList.remove('show');
@@ -291,7 +300,12 @@ function showViz(): void {
   $('dropZone').style.display = 'none';
   $('lutViz').classList.add('show');
   requestAnimationFrame(() =>
-    requestAnimationFrame(() => curve.setLut(lut)),
+    requestAnimationFrame(() => {
+      const shown = ops.outputLut() ?? lut;
+      curve.setLut(shown);
+      preview.setLut(shown);
+      analysis.render(shown, shown ? `${shown.dims}D · ${shown.size}` : '');
+    }),
   );
 }
 
@@ -368,6 +382,7 @@ $('fieldExpShift').addEventListener('change', () => {
 
 $('btnReset').addEventListener('click', () => {
   resetFields();
+  ops.reset();
   // The old build skipped this, leaving the filename box empty while the
   // toggle still claimed to be tracking the LUT name.
   syncFilename();
@@ -375,12 +390,30 @@ $('btnReset').addEventListener('click', () => {
   toast('Fields cleared');
 });
 
+const WRITERS: Record<ops.ExportFormat, (l: Lut) => string> = {
+  cube: writeCube,
+  '3dl': (l) => write3dl(l),
+  csp: writeCsp,
+  clf: writeClf,
+};
+
 $('btnDownload').addEventListener('click', () => {
   if (!lut) return;
   collectMeta(lut);
-  const name = val('fieldFilename') || 'output_edited.cube';
-  download(name, writeCube(lut));
-  toast(`Downloaded ${name}`);
+
+  const out = ops.outputLut() ?? lut;
+  if (out !== lut) out.meta = { ...lut.meta };
+
+  const format = ops.exportFormat();
+  const base = (val('fieldFilename') || 'output_edited.cube').replace(/\.[^.]+$/, '');
+  const name = `${base}.${format}`;
+
+  try {
+    download(name, WRITERS[format](out));
+    toast(`Downloaded ${name}`);
+  } catch (err) {
+    toast(err instanceof Error ? err.message : 'Export failed');
+  }
 });
 
 // ── Misc ─────────────────────────────────────────────────────────
@@ -388,6 +421,23 @@ $('btnDownload').addEventListener('click', () => {
 // ── Startup ──────────────────────────────────────────────────────
 
 preview.init();
+
+// Re-render whatever is on screen when the staged operations change.
+ops.init(() => {
+  // Operations that change the transform's direction rewrite the color space
+  // fields, so what the form shows is what gets written.
+  const override = ops.colorSpaceOverride();
+  if (override.inputCS !== undefined) applyCS('Input', override.inputCS);
+  if (override.outputCS !== undefined) applyCS('Output', override.outputCS);
+
+  if (lut) updatePreview();
+  const shown = ops.outputLut();
+  const chained = ops.chainedLut();
+  curve.setCompare(chained?.lut ?? null, chained?.name ?? '');
+  curve.setLut(shown);
+  preview.setLut(shown);
+  analysis.render(shown, shown ? `${shown.dims}D · ${shown.size}` : '');
+});
 
 batch.init(
   () => {
@@ -399,6 +449,7 @@ batch.init(
   (entry) => {
     curve.setLut(entry?.lut ?? null);
     preview.setLut(entry?.lut ?? null);
+    analysis.render(entry?.lut ?? null, entry ? entry.fileName : '');
     if (entry) {
       $('pillName').textContent = entry.fileName;
       $('pillSize').textContent = fmtSize(entry.fileSize);
@@ -406,3 +457,40 @@ batch.init(
     }
   },
 );
+
+// ── Keyboard shortcuts ───────────────────────────────────────────
+
+const TABS: Record<string, string> = {
+  '1': 'tabCurve',
+  '2': 'tabImage',
+  '3': 'tabScopes',
+  '4': 'tabCube',
+};
+
+document.addEventListener('keydown', (e) => {
+  // Never steal keys from a field the user is typing in.
+  const el = document.activeElement;
+  if (
+    el instanceof HTMLInputElement ||
+    el instanceof HTMLTextAreaElement ||
+    el instanceof HTMLSelectElement
+  ) {
+    return;
+  }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+  const tab = TABS[e.key];
+  if (tab && !$('lutViz').classList.contains('show') === false) {
+    $(tab).click();
+    e.preventDefault();
+    return;
+  }
+
+  if (e.key.toLowerCase() === 'd' && (lut || batch.isActive())) {
+    ($(batch.isActive() ? 'bExport' : 'btnDownload') as HTMLButtonElement).click();
+    e.preventDefault();
+  } else if (e.key === 'Escape') {
+    clearAll();
+    e.preventDefault();
+  }
+});
