@@ -63,6 +63,7 @@ export function parseCube(text: string): ParseResult {
   const rawData: string[] = [];
   const values: number[] = [];
   const unkeyedComments: string[] = [];
+  const unkeyedIndices: number[] = [];
 
   let dims: Dims | null = null;
   let declaredSize: number | null = null;
@@ -170,8 +171,12 @@ export function parseCube(text: string): ParseResult {
         // Notes may span several `# Notes:` lines; re-join them.
         meta[field] = meta[field] ? `${meta[field]}\n${value}` : value;
       } else {
+        // Recorded in both places for now; if these end up promoted into
+        // Notes below, they are dropped from passthrough so the writer does
+        // not emit them twice.
         unkeyedComments.push(t.replace(/^#\s?/, ''));
         passthrough.push(t);
+        unkeyedIndices.push(passthrough.length - 1);
       }
       continue;
     }
@@ -219,9 +224,12 @@ export function parseCube(text: string): ParseResult {
   data.set(values.slice(0, Math.min(values.length, expected)));
 
   // Unkeyed comments become Notes only when there is no explicit Notes field,
-  // so we never fabricate metadata that overwrites something real.
+  // so we never fabricate metadata that overwrites something real. When they
+  // are promoted, drop them from passthrough — otherwise the writer emits each
+  // one twice, once as `# Notes:` and once verbatim.
   if (!meta.notes && unkeyedComments.length) {
     meta.notes = unkeyedComments.join('\n');
+    for (const i of [...unkeyedIndices].reverse()) passthrough.splice(i, 1);
   }
 
   return {

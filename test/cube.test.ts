@@ -150,3 +150,32 @@ describe('core model', () => {
     expect(out).toContain('0.250000 0.000000 0.000000');
   });
 });
+
+describe('loose comments', () => {
+  // Promoting an unkeyed comment into Notes while also keeping it in
+  // passthrough wrote it twice on every save.
+  it('writes a promoted loose comment exactly once', () => {
+    const src = cube3d(3, ['TITLE "X"', '# a loose note']);
+    const out = writeCube(parseCube(src).lut);
+    const occurrences = out.split('\n').filter((l) => l.includes('a loose note'));
+    expect(occurrences).toHaveLength(1);
+    expect(occurrences[0]).toBe('# Notes: a loose note');
+  });
+
+  it('is stable across repeated round-trips', () => {
+    let text = cube3d(3, ['TITLE "X"', '# a loose note']);
+    for (let i = 0; i < 4; i++) text = writeCube(parseCube(text).lut);
+    expect(text.split('\n').filter((l) => l.includes('a loose note'))).toHaveLength(1);
+  });
+
+  it('keeps an explicit Notes field and does not absorb loose comments into it', () => {
+    const src = cube3d(3, ['TITLE "X"', '# Notes: real notes', '# a loose note']);
+    const { lut } = parseCube(src);
+    expect(lut.meta.notes).toBe('real notes');
+    const out = writeCube(lut);
+    // The loose comment survives verbatim rather than being merged into Notes.
+    expect(out).toContain('# Notes: real notes');
+    expect(out).toContain('# a loose note');
+    expect(out.split('\n').filter((l) => l.includes('a loose note'))).toHaveLength(1);
+  });
+});
