@@ -19,17 +19,17 @@
 
     <!-- drop zone always present; becomes overlay when viz is shown -->
     <div class="drop-zone" id="dropZone">
-      <input type="file" id="fileInput" accept=".cube">
+      <input type="file" id="fileInput" accept=".cube" multiple>
       <div class="drop-cube">.cube</div>
       <div class="drop-label">Drop file here</div>
-      <div class="drop-hint">or click to browse — .cube only</div>
+      <div class="drop-hint">or click to browse — drop several for batch mode</div>
     </div>
 
     <div class="lut-viz" id="lutViz">
       <canvas id="vizCanvas"></canvas>
       <!-- invisible drop overlay so you can still drop onto the viz -->
       <label class="viz-drop-overlay" for="fileInputViz" id="vizDropOverlay">
-        <input type="file" id="fileInputViz" accept=".cube">
+        <input type="file" id="fileInputViz" accept=".cube" multiple>
       </label>
     </div>
 
@@ -47,6 +47,111 @@
     <div class="empty-state" id="emptyState">
       <div class="empty-icon">NO FILE LOADED</div>
       <div class="empty-text">← drop a .cube to begin</div>
+    </div>
+
+
+    <div class="batch" id="batch">
+
+      <div class="section">
+        <div class="section-head">
+          <span class="section-num">01</span>
+          <span class="section-title">Queue</span>
+          <span class="section-key" id="batchCount">—</span>
+        </div>
+        <div class="queue" id="queue"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-head">
+          <span class="section-num">02</span>
+          <span class="section-title">Shared Header</span>
+          <span class="section-key">stamped on every file</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div class="field">
+            <label>Author <span class="lkey">// #</span></label>
+            <input type="text" id="bAuthor" placeholder="e.g. Jane Smith">
+          </div>
+          <div class="field">
+            <label>Date <span class="lkey">// #</span></label>
+            <input type="text" id="bDate">
+          </div>
+          <div class="field">
+            <label>Project <span class="lkey">// #</span></label>
+            <input type="text" id="bProject" placeholder="e.g. Nike Canada">
+          </div>
+          <div class="field">
+            <label>Exposure Shift <span class="lkey">// ExposureShift</span></label>
+            <select id="bExpShift"></select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Notes <span class="lkey">// #</span></label>
+          <textarea id="bNotes" rows="2" placeholder="Applied to every file in the queue"></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+          <div class="field">
+            <label>Input Color Space <span class="lkey">// InputColorSpace</span></label>
+            <select id="bInputCS"></select>
+            <div class="custom-input-wrapper" id="bInputCSWrap">
+              <input type="text" id="bInputCSCustom" placeholder="Custom color space">
+            </div>
+          </div>
+          <div class="field">
+            <label>Output Color Space <span class="lkey">// OutputColorSpace</span></label>
+            <select id="bOutputCS"></select>
+            <div class="custom-input-wrapper" id="bOutputCSWrap">
+              <input type="text" id="bOutputCSCustom" placeholder="Custom color space">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head">
+          <span class="section-num">03</span>
+          <span class="section-title">Naming</span>
+          <span class="section-key">ColorLibrary convention</span>
+        </div>
+        <div class="field">
+          <label>Filename Template</label>
+          <input type="text" id="bTemplate">
+          <div class="field-note">
+            <strong>Tokens</strong>
+            <span id="bTokenHint"></span>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;align-items:end;">
+          <div class="field">
+            <label>Look Kind <span class="lkey">// folder</span></label>
+            <select id="bLookKind">
+              <option value="Creative">Creative</option>
+              <option value="Technical">Technical</option>
+            </select>
+          </div>
+          <div class="field">
+            <label id="bFoldersLabel" class="toggle-label matched" for="bFolders">
+              <input type="checkbox" id="bFolders" checked>
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              <span class="toggle-text" id="bFoldersText">ColorLibrary folders</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="preview-wrap">
+        <div class="preview-header">
+          <span class="preview-label">Export preview</span>
+          <span class="preview-badge" id="bExportBadge">—</span>
+        </div>
+        <div class="preview-box" id="bPreview"></div>
+      </div>
+
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-ghost" id="bClear">↺ Clear queue</button>
+        <button class="btn btn-primary" id="bExport">↓ Export .zip</button>
+      </div>
+
     </div>
 
     <div class="editor" id="editor">
@@ -80,37 +185,7 @@
         </div>
         <div class="field">
           <label>Exposure Shift <span class="lkey">// ExposureShift</span></label>
-          <select id="fieldExpShift">
-            <option value="0">0 (no shift)</option>
-            <optgroup label="Positive">
-              <option value="+0.33">+1/3</option>
-              <option value="+0.5">+1/2</option>
-              <option value="+0.67">+2/3</option>
-              <option value="+1">+1</option>
-              <option value="+1.33">+1 1/3</option>
-              <option value="+1.5">+1 1/2</option>
-              <option value="+1.67">+1 2/3</option>
-              <option value="+2">+2</option>
-              <option value="+2.33">+2 1/3</option>
-              <option value="+2.5">+2 1/2</option>
-              <option value="+2.67">+2 2/3</option>
-              <option value="+3">+3</option>
-            </optgroup>
-            <optgroup label="Negative">
-              <option value="-0.33">-1/3</option>
-              <option value="-0.5">-1/2</option>
-              <option value="-0.67">-2/3</option>
-              <option value="-1">-1</option>
-              <option value="-1.33">-1 1/3</option>
-              <option value="-1.5">-1 1/2</option>
-              <option value="-1.67">-1 2/3</option>
-              <option value="-2">-2</option>
-              <option value="-2.33">-2 1/3</option>
-              <option value="-2.5">-2 1/2</option>
-              <option value="-2.67">-2 2/3</option>
-              <option value="-3">-3</option>
-            </optgroup>
-          </select>
+          <select id="fieldExpShift"></select>
           <div class="field-note">
             <strong>Annotation only.</strong>
             <span>Records a shift applied elsewhere &mdash; the LUT data is not modified.</span>
@@ -132,37 +207,7 @@
 
         <div class="field">
           <label>Input Color Space <span class="lkey">// InputColorSpace</span></label>
-          <select id="selInputCS">
-            <option value="">— unspecified —</option>
-            <optgroup label="Camera">
-              <option>ARRI LogC3 / AWG3</option>
-              <option>ARRI LogC4 / AWG4</option>
-              <option>RED Log3G10 / REDWideGamutRGB</option>
-              <option>Sony S-Log3 / S-Gamut3.Cine</option>
-              <option>Sony S-Log3 / S-Gamut3</option>
-              <option>Sony S-Log2 / S-Gamut</option>
-              <option>Canon Log 2 / Cinema Gamut</option>
-              <option>Canon Log 3 / Cinema Gamut</option>
-              <option>Panasonic V-Log / V-Gamut</option>
-              <option>Nikon N-Log / N-Gamut</option>
-              <option>Blackmagic Film Gen 5 / BWG</option>
-            </optgroup>
-            <optgroup label="Intermediate">
-              <option>DaVinci Intermediate / DaVinci Wide Gamut</option>
-              <option>ACEScg / AP1</option>
-              <option>ACES2065-1 / AP0</option>
-              <option>ACEScc / AP1</option>
-              <option>ACEScct / AP1</option>
-            </optgroup>
-            <optgroup label="Standard">
-              <option>Linear</option>
-              <option>sRGB</option>
-              <option>Rec.709 Gamma 2.2</option>
-              <option>Rec.709 Gamma 2.4</option>
-              <option>Rec.2020</option>
-            </optgroup>
-            <option value="__custom__">Custom…</option>
-          </select>
+          <select id="selInputCS"></select>
           <div class="custom-input-wrapper" id="customInputCSWrap">
             <input type="text" id="customInputCS" placeholder="Type custom color space name">
           </div>
@@ -170,33 +215,7 @@
 
         <div class="field">
           <label>Output Color Space <span class="lkey">// OutputColorSpace</span></label>
-          <select id="selOutputCS">
-            <option value="">— unspecified —</option>
-            <option value="__same__">↳ Same as Input</option>
-            <optgroup label="Display">
-              <option>Rec.709 Gamma 2.2</option>
-              <option>Rec.709 Gamma 2.4</option>
-              <option>sRGB</option>
-              <option>Rec.2020</option>
-              <option>P3-D65</option>
-              <option>P3-DCI</option>
-            </optgroup>
-            <optgroup label="Intermediate">
-              <option>DaVinci Intermediate / DaVinci Wide Gamut</option>
-              <option>ACEScg / AP1</option>
-              <option>ACES2065-1 / AP0</option>
-              <option>ACEScc / AP1</option>
-              <option>ACEScct / AP1</option>
-            </optgroup>
-            <optgroup label="Standard">
-              <option>Linear</option>
-            </optgroup>
-            <optgroup label="HDR">
-              <option>Rec.2100-PQ</option>
-              <option>Rec.2100-HLG</option>
-            </optgroup>
-            <option value="__custom__">Custom…</option>
-          </select>
+          <select id="selOutputCS"></select>
           <div class="custom-input-wrapper" id="customOutputCSWrap">
             <input type="text" id="customOutputCS" placeholder="Type custom color space name">
           </div>

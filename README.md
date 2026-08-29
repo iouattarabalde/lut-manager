@@ -21,6 +21,33 @@ Drop in a `.cube` file — 1D or 3D — and edit its header fields:
 A live preview shows the header you're about to write, and a plot of the neutral axis shows
 the LUT's response.
 
+## Batch mode
+
+Drop several `.cube` files at once to switch into batch mode — the "shipping a look package"
+workflow:
+
+- **One shared header** stamped across every file, with a per-file look name.
+- **Delivery QC** on load. Each file gets a status dot and its worst problem inline: row
+  counts that disagree with the declared size, clipped highlights or crushed shadows, a
+  non-monotonic neutral axis, identity LUTs that do nothing, 3D LUTs doing no cross-channel
+  work (so they could ship as 1D), and sizes outside 17/33/65 that some LUT boxes reject.
+  Click any row to see its curve.
+- **Naming** follows the ColorLibrary convention — `[Look]_[Source]_[Destination]_[Exposure]`,
+  e.g. `Warm_ArriLogC4_Rec709_+E1stop.cube`. Source and destination come from the color space
+  fields, mapped to library tokens. The template is editable with the tokens `{look}`,
+  `{source}`, `{dest}`, `{exp}`, `{size}`, `{date}`, `{project}`, `{author}`, `{index}`,
+  `{srcname}`; empty tokens collapse along with their separators.
+- **Zip export**, laid out as ColorLibrary folders
+  (`LUTs/LogToDisplay/ArriLogC4_to_Rec709/Creative/…`) or as a flat list. Files with errors
+  can be excluded before export.
+
+Author, project and the naming template are remembered between sessions.
+
+> **Note on the exposure token.** The `resolve-naming-conventions` skill shows `E+00` in its
+> LUT-file row (sign after the `E`, zero-padded). The form implemented here — `+E1stop`,
+> `+E1_5stop`, `+E1_33stop`, `+E0_33stop` — is the one Ismael confirmed on 2026-08-28. That
+> row of the skill is what needs reconciling.
+
 ### What it guarantees
 
 - **A header-only edit leaves the data table byte-for-byte identical.** The original rows are
@@ -51,10 +78,14 @@ Pushes to `main` deploy to GitHub Pages via `.github/workflows/deploy.yml`.
 ## Layout
 
 ```
-src/core/lut.ts      canonical in-memory LUT model, shared by everything
-src/format/cube.ts   .cube reader and writer (1D and 3D)
-src/render/curve.ts  neutral-axis plot
-src/main.ts          UI wiring
+src/core/lut.ts        canonical in-memory LUT model, shared by everything
+src/core/analyze.ts    delivery QC metrics and checks
+src/core/naming.ts     filename templates, ColorLibrary tokens and folders
+src/format/cube.ts     .cube reader and writer (1D and 3D)
+src/batch/batch.ts     batch queue, stamping and rendering
+src/render/curve.ts    neutral-axis plot
+src/ui/                shared DOM helpers, color space lists, batch panel
+src/main.ts            mode routing and single-file editor
 ```
 
 The canonical model keeps both parsed samples (for plotting and analysis) and the original
@@ -64,4 +95,5 @@ data rows (for lossless writing); see the comments in `src/core/lut.ts`.
 
 v1 was a single-file HTML/JS artifact deployed on Netlify Drop, migrated to GitHub Pages on
 2026-08-25. v2 rebuilt it on Vite with a shared LUT model, added 1D support, lossless header
-passthrough, file validation, and offline support. The v1 source is in the git history.
+passthrough, file validation, and offline support, then added batch mode with delivery QC and
+ColorLibrary naming. The v1 source is in the git history.

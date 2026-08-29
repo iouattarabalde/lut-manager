@@ -319,3 +319,63 @@
   }
   .field-note strong { color: var(--text-dim); font-weight: 500; }
 
+
+  /* ── Batch queue ────────────────────────────────────────────── */
+  .batch { display: none; animation: fadeUp 0.25s ease; }
+  .batch.show { display: block; }
+
+  .queue { display: flex; flex-direction: column; gap: 4px; }
+
+  .qrow {
+    display: grid;
+    grid-template-columns: 14px 1fr 150px auto;
+    align-items: center; gap: 10px;
+    padding: 8px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: opacity 0.15s, border-color 0.15s;
+  }
+  .qrow.excluded { opacity: 0.4; }
+  .qrow-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #47a86b; justify-self: center;
+  }
+  .qrow-warning .qrow-dot { background: #c8951a; }
+  .qrow-error   .qrow-dot { background: var(--accent); }
+
+  .qrow-main { min-width: 0; }
+  .qrow-name {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+    color: var(--text); overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  .qrow-meta {
+    font-family: 'IBM Plex Mono', monospace; font-size: 9px;
+    color: var(--text-faint); margin-top: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .qrow-meta .qrow-issue { color: #a87d15; }
+  .qrow-error .qrow-meta .qrow-issue { color: var(--accent); }
+
+  .qrow-look {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 5px 8px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+    color: var(--text); outline: none; transition: border-color 0.15s;
+  }
+  .qrow-look:focus { border-color: var(--accent2); }
+
+  .qrow-toggle {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-faint); font-size: 13px; line-height: 1;
+    padding: 3px 5px; transition: color 0.15s;
+  }
+  .qrow-toggle:hover { color: var(--text); }
+
+  .preview-box .pp { color: #6a7a6a; }
+  .preview-box .pf { color: #f0c070; }
+  .preview-box .pd { color: #e8836a; }
+  .qrow { cursor: pointer; }
+  .qrow:hover { border-color: var(--border-dark); }
+  .qrow.selected { border-color: var(--accent2); background: #f7f9fb; }

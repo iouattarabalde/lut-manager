@@ -10,35 +10,38 @@ import './styles.css';
 import { type Lut } from './core/lut.js';
 import { type ParseIssue, parseCube, writeCube } from './format/cube.js';
 import { CurveView } from './render/curve.js';
-
-const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
-  const el = document.getElementById(id);
-  if (!el) throw new Error(`Missing element #${id}`);
-  return el as T;
-};
-
-const val = (id: string): string => $<HTMLInputElement>(id).value.trim();
-const setVal = (id: string, v: string): void => {
-  $<HTMLInputElement>(id).value = v;
-};
+import { exposureSuffix } from './core/naming.js';
+import { $, download, esc, fmtSize, setVal, toast, today, val } from './ui/dom.js';
+import { populateCS, populateExposure } from './ui/colorspaces.js';
+import * as batch from './ui/batch-view.js';
 
 let lut: Lut | null = null;
 let srcFileName = '';
 
+populateExposure($<HTMLSelectElement>('fieldExpShift'));
+populateCS($<HTMLSelectElement>('selInputCS'), 'Input');
+populateCS($<HTMLSelectElement>('selOutputCS'), 'Output');
+
 const curve = new CurveView($<HTMLCanvasElement>('vizCanvas'));
 
-/**
- * Local calendar date, not UTC. `toISOString` rolls over at 00:00 UTC, which
- * stamps tomorrow's date on anything graded after ~4pm in North America.
- */
-const today = (): string => {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-};
 setVal('fieldDate', today());
 
 // ── Loading ──────────────────────────────────────────────────────
+
+/** One file opens the editor; several open the batch panel. */
+async function loadFiles(files: File[]): Promise<void> {
+  if (!files.length) return;
+  if (files.length === 1 && !batch.isActive()) {
+    await loadFile(files[0]);
+    return;
+  }
+  $('emptyState').style.display = 'none';
+  $('editor').classList.remove('show');
+  $('filePill').classList.remove('show');
+  renderIssues([]);
+  await batch.addFiles(files);
+  showViz();
+}
 
 async function loadFile(file: File): Promise<void> {
   srcFileName = file.name;
@@ -190,9 +193,6 @@ function updatePreview(): void {
     .join('\n');
 }
 
-const esc = (s: string): string =>
-  String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
 // ── Filename ─────────────────────────────────────────────────────
 
 function toFilename(str: string): string {
@@ -206,31 +206,13 @@ function toFilename(str: string): string {
   );
 }
 
-/**
- * `+2/3` becomes `plus0_67`. The old version let the raw `+` and the decimal
- * point through, since the suffix bypassed `toFilename` entirely.
- */
-function exposureSuffix(): string {
-  const raw = val('fieldExpShift');
-  const n = parseFloat(raw);
-  if (!raw || raw === '0' || !Number.isFinite(n) || n === 0) return '';
-  // Keep the decimal readable: 0.67 -> 0_67. Routing this through
-  // `toFilename` would turn the dot into a dash and read as a range.
-  const magnitude = Math.abs(n)
-    .toFixed(2)
-    .replace(/0+$/, '')
-    .replace(/\.$/, '')
-    .replace('.', '_');
-  return `_${n > 0 ? 'plus' : 'minus'}${magnitude}stop`;
-}
-
 function syncFilename(): void {
   if (!$<HTMLInputElement>('chkCustomFilename').checked) return;
   const title = val('fieldTitle');
   const base = title
     ? toFilename(title)
     : toFilename(srcFileName.replace(/\.[^.]+$/, '')) || 'output';
-  setVal('fieldFilename', base + exposureSuffix() + '.cube');
+  setVal('fieldFilename', base + exposureSuffix(val('fieldExpShift')) + '.cube');
 }
 
 function resetFilenameToggle(): void {
@@ -266,6 +248,10 @@ function resetFields(): void {
 }
 
 function clearAll(): void {
+  if (batch.isActive()) {
+    batch.clear();
+    return;
+  }
   lut = null;
   srcFileName = '';
   $('filePill').classList.remove('show');
@@ -305,8 +291,8 @@ function wireDropTarget(zone: HTMLElement): void {
   zone.addEventListener('drop', (e) => {
     e.preventDefault();
     zone.classList.remove('drag-over');
-    const f = (e as DragEvent).dataTransfer?.files[0];
-    if (f) void loadFile(f);
+    const dropped = [...((e as DragEvent).dataTransfer?.files ?? [])];
+    void loadFiles(dropped);
   });
 }
 
@@ -316,9 +302,8 @@ wireDropTarget($('vizDropOverlay'));
 (['fileInput', 'fileInputViz'] as const).forEach((id) => {
   $<HTMLInputElement>(id).addEventListener('change', (e) => {
     const input = e.target as HTMLInputElement;
-    const f = input.files?.[0];
-    if (f) void loadFile(f);
-    if (id === 'fileInputViz') input.value = '';
+    void loadFiles([...(input.files ?? [])]);
+    input.value = '';
   });
 });
 
@@ -373,27 +358,27 @@ $('btnDownload').addEventListener('click', () => {
   if (!lut) return;
   collectMeta(lut);
   const name = val('fieldFilename') || 'output_edited.cube';
-  const blob = new Blob([writeCube(lut)], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = Object.assign(document.createElement('a'), { href: url, download: name });
-  a.click();
-  URL.revokeObjectURL(url);
+  download(name, writeCube(lut));
   toast(`Downloaded ${name}`);
 });
 
 // ── Misc ─────────────────────────────────────────────────────────
 
-let toastTimer: number | undefined;
-function toast(msg: string): void {
-  const el = $('toast');
-  $('toastMsg').textContent = msg;
-  el.classList.add('show');
-  window.clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => el.classList.remove('show'), 2600);
-}
+// ── Startup ──────────────────────────────────────────────────────
 
-function fmtSize(b: number): string {
-  if (b < 1024) return `${b} B`;
-  if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`;
-  return `${(b / 1048576).toFixed(2)} MB`;
-}
+batch.init(
+  () => {
+    $('emptyState').style.display = '';
+    $('filePill').classList.remove('show');
+    $<HTMLInputElement>('fileInput').value = '';
+    hideViz();
+  },
+  (entry) => {
+    curve.setLut(entry?.lut ?? null);
+    if (entry) {
+      $('pillName').textContent = entry.fileName;
+      $('pillSize').textContent = fmtSize(entry.fileSize);
+      $('filePill').classList.add('show');
+    }
+  },
+);
