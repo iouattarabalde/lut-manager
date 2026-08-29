@@ -19,17 +19,55 @@
 
     <!-- drop zone always present; becomes overlay when viz is shown -->
     <div class="drop-zone" id="dropZone">
-      <input type="file" id="fileInput" accept=".cube" multiple>
+      <input type="file" id="fileInput" accept=".cube,image/*" multiple>
       <div class="drop-cube">.cube</div>
       <div class="drop-label">Drop file here</div>
       <div class="drop-hint">or click to browse — drop several for batch mode</div>
     </div>
 
     <div class="lut-viz" id="lutViz">
-      <canvas id="vizCanvas"></canvas>
+      <div class="viz-tabs">
+        <button class="viz-tab active" id="tabCurve" type="button">Curve</button>
+        <button class="viz-tab" id="tabImage" type="button">Image</button>
+        <button class="viz-tab" id="tabScopes" type="button">Scopes</button>
+      </div>
+
+      <div class="viz-stage">
+        <canvas id="vizCanvas"></canvas>
+        <canvas id="previewCanvas" hidden></canvas>
+        <div class="scope-stack" id="scopeStack" hidden>
+          <canvas id="waveformCanvas"></canvas>
+          <canvas id="vectorCanvas"></canvas>
+        </div>
+        <div class="preview-error" id="previewError" hidden></div>
+      </div>
+
+      <div class="preview-controls" id="previewControls" hidden>
+        <div class="pc-row">
+          <label class="pc-label" for="pvSource">Source</label>
+          <select class="pc-select" id="pvSource"></select>
+        </div>
+        <div class="pc-row">
+          <label class="pc-label" for="pvEncoding">Encode to</label>
+          <select class="pc-select" id="pvEncoding"></select>
+        </div>
+        <div class="pc-note" id="pvNote"></div>
+        <div class="pc-row">
+          <span class="pc-label">Interp</span>
+          <div class="pc-seg">
+            <button class="pc-seg-btn active" id="pvTetra" type="button">Tetrahedral</button>
+            <button class="pc-seg-btn" id="pvTri" type="button">Trilinear</button>
+          </div>
+        </div>
+        <div class="pc-row">
+          <label class="pc-label" for="pvSplit">Split</label>
+          <input class="pc-range" type="range" id="pvSplit" min="0" max="100" value="50">
+        </div>
+      </div>
+
       <!-- invisible drop overlay so you can still drop onto the viz -->
       <label class="viz-drop-overlay" for="fileInputViz" id="vizDropOverlay">
-        <input type="file" id="fileInputViz" accept=".cube" multiple>
+        <input type="file" id="fileInputViz" accept=".cube,image/*" multiple>
       </label>
     </div>
 

@@ -14,6 +14,7 @@ import { exposureSuffix } from './core/naming.js';
 import { $, download, esc, fmtSize, setVal, toast, today, val } from './ui/dom.js';
 import { populateCS, populateExposure } from './ui/colorspaces.js';
 import * as batch from './ui/batch-view.js';
+import * as preview from './ui/preview-view.js';
 
 let lut: Lut | null = null;
 let srcFileName = '';
@@ -28,8 +29,27 @@ setVal('fieldDate', today());
 
 // ── Loading ──────────────────────────────────────────────────────
 
-/** One file opens the editor; several open the batch panel. */
+const isImage = (f: File): boolean =>
+  f.type.startsWith('image/') || /\.(png|jpe?g|webp|avif|gif|bmp)$/i.test(f.name);
+
+/** One .cube opens the editor; several open the batch panel; images become the preview source. */
 async function loadFiles(files: File[]): Promise<void> {
+  if (!files.length) return;
+
+  const images = files.filter(isImage);
+  const luts = files.filter((f) => !isImage(f));
+
+  if (images.length) {
+    try {
+      await preview.setStill(images[0]);
+      toast(`Preview source: ${images[0].name}`);
+    } catch {
+      toast('Could not read that image');
+    }
+    if (!luts.length) return;
+  }
+
+  files = luts;
   if (!files.length) return;
   if (files.length === 1 && !batch.isActive()) {
     await loadFile(files[0]);
@@ -61,6 +81,7 @@ async function loadFile(file: File): Promise<void> {
   syncFilename();
   updatePreview();
   showViz();
+  preview.setLut(parsed);
 }
 
 function applyMetaToFields(l: Lut): void {
@@ -366,6 +387,8 @@ $('btnDownload').addEventListener('click', () => {
 
 // ── Startup ──────────────────────────────────────────────────────
 
+preview.init();
+
 batch.init(
   () => {
     $('emptyState').style.display = '';
@@ -375,6 +398,7 @@ batch.init(
   },
   (entry) => {
     curve.setLut(entry?.lut ?? null);
+    preview.setLut(entry?.lut ?? null);
     if (entry) {
       $('pillName').textContent = entry.fileName;
       $('pillSize').textContent = fmtSize(entry.fileSize);
