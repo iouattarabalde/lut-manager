@@ -1,9 +1,10 @@
-# LUT Header Editor
+# LUT Manager
 
-A browser tool for editing the metadata header of `.cube` LUT files without touching the
-LUT data itself.
+A browser tool for working with `.cube` LUTs: inspect them, edit their metadata headers
+without touching the data, batch-stamp and QC a delivery, see them applied to an image, and
+convert between formats. Everything runs client-side — LUTs never leave the browser.
 
-**Live: https://iouattarabalde.github.io/lut-header-editor/**
+**Live: https://iouattarabalde.github.io/lut-manager/**
 
 ## What it does
 
@@ -183,7 +184,7 @@ data rows (for lossless writing); see the comments in `src/core/lut.ts`.
 
 ## History
 
-v1 was a single-file HTML/JS artifact deployed on Netlify Drop, migrated to GitHub Pages on
+Named "LUT Header Editor" until it outgrew the name. v1 was a single-file HTML/JS artifact deployed on Netlify Drop, migrated to GitHub Pages on
 2026-08-25. v2 rebuilt it on Vite with a shared LUT model, added 1D support, lossless header
 passthrough, file validation, and offline support, then added batch mode with delivery QC and
 ColorLibrary naming, a GPU image preview with scopes, LUT operations with multi-format export,

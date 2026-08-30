@@ -125,7 +125,13 @@
     background: var(--accent); color: white;
     padding: 2px 6px; letter-spacing: 0.1em; font-weight: 500;
   }
-  .pill-name { font-family: 'IBM Plex Mono', monospace; font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pill-name { font-family: 'IBM Plex Mono', monospace; font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+  .pill-replace {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
+    background: none; border: none; padding: 0; cursor: pointer;
+    color: inherit; font: inherit; text-align: left;
+  }
+  .pill-replace:hover .pill-name { text-decoration: underline; }
   .pill-size { font-family: 'IBM Plex Mono', monospace; font-size: 10px; opacity: 0.5; }
   .pill-clear { background: none; border: none; cursor: pointer; color: var(--bg); opacity: 0.5; font-size: 14px; line-height: 1; transition: opacity 0.15s; padding: 2px; }
   .pill-clear:hover { opacity: 1; }
@@ -286,14 +292,13 @@
   .viz-drop-overlay {
     position: absolute; inset: 0;
     border-radius: var(--radius);
-    cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     border: 2px solid transparent;
     transition: border-color 0.15s, background 0.15s;
     z-index: 10;
-  }
-  .viz-drop-overlay input[type="file"] {
-    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    /* Never swallow clicks: the tabs sit underneath, and the cube viewer
+       needs drag events of its own. */
+    pointer-events: none;
   }
   .viz-drop-overlay.drag-over {
     border-color: var(--accent);
@@ -556,28 +561,28 @@
 
   /* ── Analysis ───────────────────────────────────────────────── */
   .metrics {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
-    gap: 1px; background: var(--border); border: 1px solid var(--border);
-    border-radius: var(--radius); overflow: hidden;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+    gap: 10px;
   }
-  .metric { background: var(--surface); padding: 9px 11px; }
-  .metric-label {
+  .acard {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px 12px 11px;
+    display: flex; flex-direction: column; gap: 7px;
+    color: var(--text);
+  }
+  .acard-wide { grid-column: 1 / -1; }
+  .acard-bad { border-color: #c8951a; }
+  .acard-title {
     font-family: 'IBM Plex Mono', monospace; font-size: 9px;
-    letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim);
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim);
   }
-  .metric-value {
-    font-family: 'IBM Plex Mono', monospace; font-size: 13px;
-    color: var(--text); margin-top: 3px;
+  .acard-visual { display: flex; align-items: center; min-height: 26px; }
+  .acard-visual svg { border-radius: 2px; }
+  .acard-caption {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+    line-height: 1.45; color: var(--text-dim);
   }
-  .metric-value.bad { color: var(--accent); }
-  .metric-sub {
-    font-family: 'IBM Plex Mono', monospace; font-size: 9px;
-    color: var(--text-faint); margin-top: 2px;
-  }
-  .metric-swatch {
-    display: inline-block; width: 8px; height: 8px; border-radius: 2px;
-    border: 1px solid rgba(0,0,0,0.2); margin-right: 5px; vertical-align: baseline;
-  }
+  .acard-bad .acard-caption { color: #a87d15; }
 
   .checks { margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
   .checks:empty { display: none; }

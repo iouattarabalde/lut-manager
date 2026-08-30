@@ -317,22 +317,36 @@ function hideViz(): void {
 
 // ── Wiring ───────────────────────────────────────────────────────
 
-function wireDropTarget(zone: HTMLElement): void {
-  zone.addEventListener('dragover', (e) => {
+function wireDropTarget(zone: HTMLElement, indicator: HTMLElement = zone): void {
+  let depth = 0;
+  const clear = () => {
+    depth = 0;
+    indicator.classList.remove('drag-over');
+  };
+
+  zone.addEventListener('dragenter', (e) => {
     e.preventDefault();
-    zone.classList.add('drag-over');
+    depth++;
+    indicator.classList.add('drag-over');
   });
-  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('dragover', (e) => e.preventDefault());
+  // Moving between child elements fires dragleave, so count enters and leaves
+  // rather than clearing on the first one.
+  zone.addEventListener('dragleave', () => {
+    if (--depth <= 0) clear();
+  });
   zone.addEventListener('drop', (e) => {
     e.preventDefault();
-    zone.classList.remove('drag-over');
-    const dropped = [...((e as DragEvent).dataTransfer?.files ?? [])];
-    void loadFiles(dropped);
+    clear();
+    void loadFiles([...((e as DragEvent).dataTransfer?.files ?? [])]);
   });
 }
 
 wireDropTarget($('dropZone'));
-wireDropTarget($('vizDropOverlay'));
+// Drag over the whole viz panel, with the overlay purely as the indicator.
+wireDropTarget($('lutViz'), $('vizDropOverlay'));
+
+$('pillReplace').addEventListener('click', () => $('fileInputViz').click());
 
 (['fileInput', 'fileInputViz'] as const).forEach((id) => {
   $<HTMLInputElement>(id).addEventListener('change', (e) => {

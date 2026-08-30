@@ -3,8 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Edit .cube LUT metadata headers without touching the LUT data.">
-<title>LUT Header Editor</title>
+<meta name="description" content="Inspect, edit, batch-stamp and convert .cube LUTs in the browser.">
+<title>LUT Manager</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-180.png">
 <meta name="theme-color" content="#f2f0eb">
 </head>
 <body>
@@ -14,7 +16,7 @@
   <!-- LEFT -->
   <div class="panel-left">
     <div class="headline">
-      <span class="headline-eyebrow">LUT Header Editor</span>
+      <span class="headline-eyebrow">LUT Manager</span>
     </div>
 
     <!-- drop zone always present; becomes overlay when viz is shown -->
@@ -68,16 +70,19 @@
       </div>
 
       <!-- invisible drop overlay so you can still drop onto the viz -->
-      <label class="viz-drop-overlay" for="fileInputViz" id="vizDropOverlay">
-        <input type="file" id="fileInputViz" accept=".cube,image/*" multiple>
-      </label>
+      <!-- Drag feedback only. It must never intercept clicks, or the tabs
+           and the cube's orbit controls become unreachable. -->
+      <div class="viz-drop-overlay" id="vizDropOverlay" aria-hidden="true"></div>
     </div>
 
     <div class="file-pill" id="filePill">
-      <span class="pill-ext">CUBE</span>
-      <span class="pill-name" id="pillName">—</span>
-      <span class="pill-size" id="pillSize">—</span>
-      <button class="pill-clear" id="btnClear">✕</button>
+      <input type="file" id="fileInputViz" accept=".cube,image/*" multiple hidden>
+      <button class="pill-replace" id="pillReplace" type="button" title="Load a different file">
+        <span class="pill-ext">CUBE</span>
+        <span class="pill-name" id="pillName">—</span>
+        <span class="pill-size" id="pillSize">—</span>
+      </button>
+      <button class="pill-clear" id="btnClear" title="Clear">✕</button>
     </div>
   </div>
 

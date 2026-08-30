@@ -1,29 +1,55 @@
 /**
- * Analysis readouts: the numbers a colorist wants before shipping a LUT.
- * Reads whatever is currently on screen, so staged operations are reflected.
+ * Analysis panel.
+ *
+ * Built around pictures rather than a column of numbers: what the LUT does to
+ * a grey ramp, where its curve sits against identity, how much it clips, and
+ * which way it pushes colour. Figures stay as captions on the visuals that
+ * explain them.
  */
 
 import { type Lut } from '../core/lut.js';
-import { type Check, analyze, runChecks } from '../core/analyze.js';
+import { type Check, analyze } from '../core/analyze.js';
+import { runChecks } from '../core/analyze.js';
+import {
+  castBars,
+  meter,
+  rampStrip,
+  swatchPair,
+  toneCurve,
+} from '../render/analysis-graphics.js';
 import { $ } from './dom.js';
 
 const pct = (v: number): string =>
-  v === 0 ? '0%' : v >= 0.01 ? `${(v * 100).toFixed(1)}%` : `${(v * 100).toFixed(2)}%`;
+  v === 0 ? 'none' : v >= 0.01 ? `${(v * 100).toFixed(1)}%` : `${(v * 100).toFixed(2)}%`;
 
-/** A small colour chip so black/white/mid points read at a glance. */
-function swatch(rgb: [number, number, number]): string {
-  const to8 = (v: number) => Math.round(Math.max(0, Math.min(1, v)) * 255);
-  return `<span class="metric-swatch" style="background:rgb(${to8(rgb[0])},${to8(rgb[1])},${to8(rgb[2])})"></span>`;
+interface Card {
+  title: string;
+  /** Plain-language reading of the visual. */
+  caption: string;
+  visual: SVGElement;
+  wide?: boolean;
+  bad?: boolean;
 }
 
-const triplet = (rgb: [number, number, number]): string =>
-  rgb.map((v) => v.toFixed(3)).join(' ');
+/** How a contrast slope reads in words. */
+function contrastWord(slope: number): string {
+  if (slope > 1.6) return 'much more contrast';
+  if (slope > 1.15) return 'more contrast';
+  if (slope > 0.9) return 'about the same contrast';
+  if (slope > 0.6) return 'softer, flatter';
+  return 'much flatter';
+}
 
-interface Metric {
-  label: string;
-  value: string;
-  sub?: string;
-  bad?: boolean;
+function castWord(lut: Lut): string {
+  const m = analyze(lut);
+  const dev = (rgb: [number, number, number]) => {
+    const mean = (rgb[0] + rgb[1] + rgb[2]) / 3;
+    return [rgb[0] - mean, rgb[1] - mean, rgb[2] - mean];
+  };
+  const [dr, , db] = dev(m.midPoint);
+  const warm = dr - db;
+  if (Math.abs(warm) < 0.004) return 'neutral through the midtones';
+  return warm > 0 ? 'warmer through the midtones' : 'cooler through the midtones';
 }
 
 export function render(lut: Lut | null, subject = ''): void {
@@ -39,85 +65,82 @@ export function render(lut: Lut | null, subject = ''): void {
 
   const m = analyze(lut);
 
-  const metrics: Metric[] = [
+  const cards: Card[] = [
     {
-      label: 'Black point',
-      value: `${swatch(m.blackPoint)}${triplet(m.blackPoint)}`,
-      sub: 'output at input 0',
+      title: 'Grey ramp',
+      caption: m.isIdentity
+        ? 'unchanged — this LUT does nothing'
+        : `input above, result below — ${contrastWord(m.midSlope)}`,
+      visual: rampStrip(lut),
+      wide: true,
+      bad: m.isIdentity,
     },
     {
-      label: 'White point',
-      value: `${swatch(m.whitePoint)}${triplet(m.whitePoint)}`,
-      sub: 'output at input 1',
+      title: 'Tone curve',
+      caption: `${m.midSlope.toFixed(2)}× at mid, against the dashed identity line`,
+      visual: toneCurve(lut),
     },
     {
-      label: 'Mid point',
-      value: `${swatch(m.midPoint)}${triplet(m.midPoint)}`,
-      sub: 'neutral at mid input',
+      title: 'Colour cast',
+      caption: castWord(lut) + ' — shadows, mid, highlights',
+      visual: castBars(lut),
     },
     {
-      label: 'Contrast',
-      value: m.midSlope.toFixed(2) + '×',
-      sub: 'slope at mid',
+      title: 'Black point',
+      caption: `black in → ${m.blackPoint.map((v) => v.toFixed(3)).join(' ')}${
+        m.blackPoint[0] > 0.02 ? ' — lifted' : ''
+      }`,
+      visual: swatchPair([0, 0, 0], m.blackPoint),
     },
     {
-      label: 'Clipped high',
-      value: pct(m.clippedHigh),
-      sub: 'values ≥ 1.0',
+      title: 'White point',
+      caption: `white in → ${m.whitePoint.map((v) => v.toFixed(3)).join(' ')}${
+        m.whitePoint[0] < 0.98 ? ' — held back' : ''
+      }`,
+      visual: swatchPair([1, 1, 1], m.whitePoint),
+    },
+    {
+      title: 'Highlights clipped',
+      caption:
+        m.clippedHigh > 0.02
+          ? `${pct(m.clippedHigh)} pinned at white — detail is gone`
+          : `${pct(m.clippedHigh)} pinned at white`,
+      visual: meter(m.clippedHigh),
       bad: m.clippedHigh > 0.02,
     },
     {
-      label: 'Clipped low',
-      value: pct(m.clippedLow),
-      sub: 'values ≤ 0.0',
+      title: 'Shadows crushed',
+      caption:
+        m.clippedLow > 0.02
+          ? `${pct(m.clippedLow)} pinned at black — detail is gone`
+          : `${pct(m.clippedLow)} pinned at black`,
+      visual: meter(m.clippedLow),
       bad: m.clippedLow > 0.02,
-    },
-    {
-      label: 'Max deviation',
-      value: m.maxDeviation.toFixed(4),
-      sub: 'vs identity',
-    },
-    {
-      label: 'Neutral',
-      value: m.neutralMonotonic ? 'monotonic' : 'reverses',
-      sub: m.neutralMonotonic ? 'no inversions' : 'banding risk',
-      bad: !m.neutralMonotonic,
-    },
-    {
-      label: 'Channels',
-      value: m.isChannelIndependent ? 'independent' : 'cross-linked',
-      sub: m.isChannelIndependent ? 'reducible to 1D' : 'genuinely 3D',
-    },
-    {
-      label: 'Grid',
-      value: `${lut.dims}D · ${lut.size}`,
-      sub: m.isIdentity ? 'identity — does nothing' : 'active transform',
-      bad: m.isIdentity,
     },
   ];
 
-  box.replaceChildren(
-    ...metrics.map((metric) => {
-      const el = document.createElement('div');
-      el.className = 'metric';
-      const label = document.createElement('div');
-      label.className = 'metric-label';
-      label.textContent = metric.label;
-      const value = document.createElement('div');
-      value.className = `metric-value${metric.bad ? ' bad' : ''}`;
-      value.innerHTML = metric.value;
-      el.append(label, value);
-      if (metric.sub) {
-        const sub = document.createElement('div');
-        sub.className = 'metric-sub';
-        sub.textContent = metric.sub;
-        el.append(sub);
-      }
-      return el;
-    }),
-  );
-
+  box.replaceChildren(...cards.map(buildCard));
   renderChecks(checksBox, runChecks(lut, m));
+}
+
+function buildCard(card: Card): HTMLElement {
+  const el = document.createElement('div');
+  el.className = `acard${card.wide ? ' acard-wide' : ''}${card.bad ? ' acard-bad' : ''}`;
+
+  const title = document.createElement('div');
+  title.className = 'acard-title';
+  title.textContent = card.title;
+
+  const visual = document.createElement('div');
+  visual.className = 'acard-visual';
+  visual.append(card.visual);
+
+  const caption = document.createElement('div');
+  caption.className = 'acard-caption';
+  caption.textContent = card.caption;
+
+  el.append(title, visual, caption);
+  return el;
 }
 
 function renderChecks(box: HTMLElement, checks: Check[]): void {

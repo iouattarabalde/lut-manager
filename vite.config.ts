@@ -1,10 +1,10 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// Built for https://<user>.github.io/lut-header-editor/, but served from the
-// root in dev so local URLs stay simple.
+// Built for https://<user>.github.io/lut-manager/, but served from the root in
+// dev so local URLs stay simple.
 export default defineConfig(({ command }) => ({
-  base: command === 'build' ? '/lut-header-editor/' : '/',
+  base: command === 'build' ? '/lut-manager/' : '/',
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
@@ -14,13 +14,18 @@ export default defineConfig(({ command }) => ({
         globPatterns: ['**/*.{js,css,html,woff2,svg,png}'],
       },
       manifest: {
-        name: 'LUT Header Editor',
-        short_name: 'LUT Editor',
-        description: 'Edit .cube LUT metadata headers without touching the LUT data.',
+        name: 'LUT Manager',
+        short_name: 'LUT Manager',
+        description: 'Inspect, edit, batch-stamp and convert .cube LUTs in the browser.',
         theme_color: '#f2f0eb',
         background_color: '#f2f0eb',
         display: 'standalone',
-        icons: [],
+        icons: [
+          { src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml' },
+          { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
       },
     }),
   ],

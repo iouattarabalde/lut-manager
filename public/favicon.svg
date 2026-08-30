@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="LUT Manager">
+  <!-- An isometric cube: the LUT lattice, with the three visible faces
+       carrying red, green and blue so the mark reads at 16px. -->
+  <rect width="64" height="64" rx="13" fill="#1a1814"/>
+  <g transform="translate(32 33)">
+    <!-- top face -->
+    <path d="M0 -19 L17 -9.5 L0 0 L-17 -9.5 Z" fill="#5fa8d3"/>
+    <!-- left face -->
+    <path d="M-17 -9.5 L0 0 L0 19 L-17 9.5 Z" fill="#c8390a"/>
+    <!-- right face -->
+    <path d="M17 -9.5 L17 9.5 L0 19 L0 0 Z" fill="#e8a33a"/>
+    <!-- lattice lines, the grid a cube LUT samples on -->
+    <g stroke="#1a1814" stroke-width="1.6" opacity="0.55" fill="none">
+      <path d="M-8.5 -14.25 L8.5 -4.75 M8.5 -14.25 L-8.5 -4.75"/>
+      <path d="M-17 -3.2 L0 6.3 M-17 3.2 L0 12.7"/>
+      <path d="M17 -3.2 L0 6.3 M17 3.2 L0 12.7"/>
+    </g>
+  </g>
+</svg>
