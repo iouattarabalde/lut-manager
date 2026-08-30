@@ -36,6 +36,9 @@ let cubeFailed = false;
 let lut: Lut | null = null;
 let still: DroppedStill | null = null;
 let sourceId: ChartId | 'still' = 'checker';
+/** LUT strength shared by every tab. */
+let mixValue = 1;
+let onMixChange: (mix: number) => void = () => {};
 let encodingId: EncodingId = 'logc3';
 /** True until the user picks an encoding, so the LUT can keep suggesting one. */
 let encodingAuto = true;
@@ -165,8 +168,10 @@ function updateNote(): void {
 
 export function setLut(next: Lut | null): void {
   lut = next;
+  $('mixRow').hidden = !next;
   const r = ensureRenderer();
   if (!r) return;
+  r.mix = mixValue;
   r.setLut(next);
 
   // Follow the LUT's declared input space until the user overrides it.
@@ -278,6 +283,7 @@ function showTab(which: Tab): void {
   // The cube plots the LUT itself; the source and encoding controls don't
   // apply to it.
   $('previewControls').hidden = which === 'curve' || which === 'cube';
+  $('mixRow').hidden = !lut;
 
   if (which === 'curve') {
     canvas().hidden = true;
@@ -290,6 +296,7 @@ function showTab(which: Tab): void {
     $('previewError').hidden = true;
     const c = ensureCube();
     if (c) {
+      c.mix = mixValue;
       c.setLut(lut);
       // The canvas has no size until the browser has laid out the newly
       // revealed element, so draw on the next frame rather than this one.
@@ -313,11 +320,27 @@ export function showImageTab(): void {
   showTab('image');
 }
 
+/** Set LUT strength, 0-1, and refresh whichever view is showing. */
+export function setMix(next: number): void {
+  mixValue = Math.max(0, Math.min(1, next));
+  $<HTMLInputElement>('pvMix').value = String(Math.round(mixValue * 100));
+  $('pvMixValue').textContent = `${Math.round(mixValue * 100)}%`;
+  if (renderer) renderer.mix = mixValue;
+  if (cube) cube.mix = mixValue;
+  onMixChange(mixValue);
+  redraw();
+}
+
+export function mix(): number {
+  return mixValue;
+}
+
 export function redraw(): void {
   if (activeTab === 'curve') return;
   if (activeTab === 'cube') {
     const c = ensureCube();
     if (c) {
+      c.mix = mixValue;
       c.setLut(lut);
       requestAnimationFrame(() => c.draw());
     }
@@ -327,7 +350,8 @@ export function redraw(): void {
   else refreshSource();
 }
 
-export function init(): void {
+export function init(onMix: (mix: number) => void = () => {}): void {
+  onMixChange = onMix;
   const sourceSel = $<HTMLSelectElement>('pvSource');
   for (const chart of CHARTS) {
     sourceSel.append(
@@ -378,14 +402,18 @@ export function init(): void {
   $('pvTetra').addEventListener('click', () => setInterp('tetrahedral'));
   $('pvTri').addEventListener('click', () => setInterp('trilinear'));
 
-  const split = $<HTMLInputElement>('pvSplit');
-  split.addEventListener('input', () => {
-    if (!renderer) return;
-    renderer.split = Number(split.value) / 100;
-    renderer.draw();
+  const mix = $<HTMLInputElement>('pvMix');
+  mix.addEventListener('input', () => {
+    setMix(Number(mix.value) / 100);
   });
 
-  window.addEventListener('resize', redraw);
+  // Redrawing the scopes means a full readPixels plus a CPU pass over every
+  // pixel, so coalesce bursts of resizes into one redraw at the end.
+  let resizeTimer: number | undefined;
+  window.addEventListener('resize', () => {
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(redraw, 90);
+  });
 }
 
 /** Exposed so tests and diagnostics can read pixels back. */

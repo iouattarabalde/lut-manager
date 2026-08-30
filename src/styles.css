@@ -35,7 +35,6 @@
     .file-pill { background: var(--surface2); color: var(--text); }
     .pill-clear { color: var(--text); }
     .toast { background: var(--surface2); color: var(--text); }
-    .preview-box { background: #0f0e12; }
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -52,14 +51,37 @@
 
   .layout {
     display: grid;
-    grid-template-columns: 1fr 2fr;
+    /* Driven by the divider drag; persisted per viewer. */
+    grid-template-columns: var(--left-width, 33%) 7px 1fr;
     height: 100vh;
     overflow: hidden;
   }
 
+  .divider {
+    position: relative;
+    cursor: col-resize;
+    background: var(--border);
+    transition: background 0.15s;
+    touch-action: none;
+  }
+  /* A wider invisible grab area than the visible line. */
+  .divider::before {
+    content: '';
+    position: absolute; inset: 0 -5px;
+  }
+  .divider::after {
+    content: '';
+    position: absolute; top: 50%; left: 50%;
+    width: 3px; height: 34px; margin: -17px 0 0 -1.5px;
+    border-radius: 2px; background: var(--border-dark);
+    transition: background 0.15s;
+  }
+  .divider:hover, .divider.dragging { background: var(--accent); }
+  .divider:hover::after, .divider.dragging::after { background: var(--accent); }
+  body.resizing { cursor: col-resize; user-select: none; }
+
   /* Left panel */
   .panel-left {
-    border-right: 1px solid var(--border);
     padding: 20px;
     display: flex;
     flex-direction: column;
@@ -193,18 +215,21 @@
   .preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
   .preview-label { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim); }
   .preview-badge { font-family: 'IBM Plex Mono', monospace; font-size: 9px; background: var(--surface2); padding: 2px 7px; color: var(--text-dim); letter-spacing: 0.05em; }
+  /* Always black, in both themes. This used to be var(--text), which in dark
+     mode is near-white — a white box with pale grey text. */
   .preview-box {
-    background: var(--text); color: #c8c4bc;
+    background: #08080a; color: #d8d4cc;
     padding: 16px 18px; font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px; line-height: 1.75;
+    font-size: 11.5px; line-height: 1.8;
     white-space: pre; overflow-x: auto;
+    border: 1px solid var(--border);
     border-radius: var(--radius);
   }
-  .preview-box .pk { color: #7ec8e3; }
-  .preview-box .pv { color: #f0c070; }
-  .preview-box .pc { color: #6a7a6a; font-style: italic; }
-  .preview-box .pcs { color: #9dcc88; }
-  .preview-box .pn { color: #e8836a; }
+  .preview-box .pk { color: #8fd6f0; }
+  .preview-box .pv { color: #ffd486; }
+  .preview-box .pc { color: #8a9a8a; }
+  .preview-box .pcs { color: #b6e3a0; }
+  .preview-box .pn { color: #ff9d7d; }
 
   /* Actions */
   .btn {
@@ -318,7 +343,8 @@
 
   @media (max-width: 680px) {
     .layout { grid-template-columns: 1fr; }
-    .panel-left { border-right: none; border-bottom: 1px solid var(--border); }
+    .divider { display: none; }
+    .panel-left { border-bottom: 1px solid var(--border); }
     h1 { font-size: 36px; }
   }
 
@@ -404,9 +430,9 @@
   }
   .qrow-toggle:hover { color: var(--text); }
 
-  .preview-box .pp { color: #6a7a6a; }
-  .preview-box .pf { color: #f0c070; }
-  .preview-box .pd { color: #e8836a; }
+  .preview-box .pp { color: #8a9a8a; }
+  .preview-box .pf { color: #ffd486; }
+  .preview-box .pd { color: #ff9d7d; }
   .qrow { cursor: pointer; }
   .qrow:hover { border-color: var(--border-dark); }
   .qrow.selected { border-color: var(--accent2); background: #f7f9fb; }
@@ -441,8 +467,20 @@
   }
   .preview-error[hidden] { display: none; }
 
+  /* Sits outside .preview-controls: LUT strength applies to every tab, not
+     just the image. */
+  .mix-row {
+    flex-shrink: 0; display: flex; align-items: center; gap: 9px;
+    padding-top: 10px;
+  }
+  .mix-row[hidden] { display: none; }
+  .mix-value {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+    color: var(--text); width: 34px; text-align: right; flex-shrink: 0;
+  }
+
   .preview-controls {
-    flex-shrink: 0; padding-top: 10px;
+    flex-shrink: 0; padding-top: 8px;
     display: flex; flex-direction: column; gap: 7px;
   }
   .preview-controls[hidden] { display: none; }
@@ -576,7 +614,7 @@
     font-family: 'IBM Plex Mono', monospace; font-size: 9px;
     letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim);
   }
-  .acard-visual { display: flex; align-items: center; min-height: 26px; }
+  .acard-visual { display: flex; align-items: center; min-height: 34px; }
   .acard-visual svg { border-radius: 2px; }
   .acard-caption {
     font-family: 'IBM Plex Mono', monospace; font-size: 10px;

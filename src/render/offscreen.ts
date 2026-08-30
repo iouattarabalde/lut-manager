@@ -58,7 +58,7 @@ export function renderThumbnail(
   for (let i = 0; i < linear.length; i++) encoded[i] = encode(linear[i]);
 
   r.imageRect = [0, 0, 1, 1];
-  r.showSplit = false;
+  r.mix = 1;
   r.setSource(encoded, w, h);
   r.setLut(lut);
   r.draw();

@@ -46,6 +46,12 @@
         <div class="preview-error" id="previewError" hidden></div>
       </div>
 
+      <div class="mix-row" id="mixRow" hidden>
+        <label class="pc-label" for="pvMix">LUT</label>
+        <input class="pc-range" type="range" id="pvMix" min="0" max="100" value="100">
+        <output class="mix-value" id="pvMixValue" for="pvMix">100%</output>
+      </div>
+
       <div class="preview-controls" id="previewControls" hidden>
         <div class="pc-row">
           <label class="pc-label" for="pvSource">Source</label>
@@ -62,10 +68,6 @@
             <button class="pc-seg-btn active" id="pvTetra" type="button">Tetrahedral</button>
             <button class="pc-seg-btn" id="pvTri" type="button">Trilinear</button>
           </div>
-        </div>
-        <div class="pc-row">
-          <label class="pc-label" for="pvSplit">Split</label>
-          <input class="pc-range" type="range" id="pvSplit" min="0" max="100" value="50">
         </div>
       </div>
 
@@ -85,6 +87,9 @@
       <button class="pill-clear" id="btnClear" title="Clear">✕</button>
     </div>
   </div>
+
+  <div class="divider" id="divider" role="separator" aria-orientation="vertical"
+       aria-label="Resize panels" tabindex="0"></div>
 
   <!-- RIGHT -->
   <div class="panel-right">

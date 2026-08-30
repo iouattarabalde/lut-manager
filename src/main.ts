@@ -17,6 +17,7 @@ import * as batch from './ui/batch-view.js';
 import * as preview from './ui/preview-view.js';
 import * as ops from './ui/ops-view.js';
 import * as analysis from './ui/analysis-view.js';
+import * as divider from './ui/divider.js';
 import { write3dl } from './format/lustre3dl.js';
 import { writeCsp } from './format/csp.js';
 import { writeClf } from './format/clf.js';
@@ -434,7 +435,14 @@ $('btnDownload').addEventListener('click', () => {
 
 // ── Startup ──────────────────────────────────────────────────────
 
-preview.init();
+divider.init();
+
+// LUT strength is shared: the curve dials back toward identity in step with
+// the image, the scopes and the cube.
+preview.init((mix) => {
+  curve.mix = mix;
+  curve.draw();
+});
 
 // Re-render whatever is on screen when the staged operations change.
 ops.init(() => {

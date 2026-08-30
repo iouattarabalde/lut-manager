@@ -12,6 +12,7 @@ import { type Check, analyze } from '../core/analyze.js';
 import { runChecks } from '../core/analyze.js';
 import {
   castBars,
+  liftBars,
   meter,
   rampStrip,
   swatchPair,
@@ -67,13 +68,19 @@ export function render(lut: Lut | null, subject = ''): void {
 
   const cards: Card[] = [
     {
-      title: 'Grey ramp',
+      title: 'Grey ramp — input above, result below',
       caption: m.isIdentity
         ? 'unchanged — this LUT does nothing'
-        : `input above, result below — ${contrastWord(m.midSlope)}`,
+        : `${contrastWord(m.midSlope)}, ${castWord(lut)}`,
       visual: rampStrip(lut),
       wide: true,
       bad: m.isIdentity,
+    },
+    {
+      title: 'Where it moves each tone',
+      caption: 'above the line is brighter, below is darker',
+      visual: liftBars(lut),
+      wide: true,
     },
     {
       title: 'Tone curve',

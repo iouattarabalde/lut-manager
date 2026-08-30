@@ -37,21 +37,61 @@ function svgRoot(w: number, h: number): SVGSVGElement {
 
 /**
  * The LUT applied to a grey ramp, above the ramp it started from.
- * Contrast, crush, blown highlights and colour cast are all visible at once.
+ * Contrast, crush, blown highlights and colour cast are all visible at once —
+ * which only works if the bands are tall enough to actually compare.
  */
-export function rampStrip(lut: Lut, steps = 32): SVGSVGElement {
+export function rampStrip(lut: Lut, steps = 64): SVGSVGElement {
   const w = steps;
-  const h = 10;
+  const bar = 26;
+  const gap = 3;
+  const h = bar * 2 + gap;
   const svg = svgRoot(w, h);
-  svg.append(el('rect', {
-    x: 0, y: 0, width: w, height: h, fill: 'currentColor', opacity: 0.15,
-  }));
 
   for (let i = 0; i < steps; i++) {
     const t = i / (steps - 1);
-    svg.append(el('rect', { x: i, y: 0, width: 1.02, height: 4.6, fill: css([t, t, t]) }));
+    svg.append(el('rect', { x: i, y: 0, width: 1.02, height: bar, fill: css([t, t, t]) }));
     const out = sampleLut(lut, [t, t, t]);
-    svg.append(el('rect', { x: i, y: 5.4, width: 1.02, height: 4.6, fill: css(out) }));
+    svg.append(el('rect', { x: i, y: bar + gap, width: 1.02, height: bar, fill: css(out) }));
+  }
+
+  // Outline so the ends of each band read against any background.
+  for (const y of [0, bar + gap]) {
+    svg.append(
+      el('rect', {
+        x: 0.25, y: y + 0.25, width: w - 0.5, height: bar - 0.5,
+        fill: 'none', stroke: 'currentColor', 'stroke-width': 0.5, 'stroke-opacity': 0.3,
+      }),
+    );
+  }
+  return svg;
+}
+
+/**
+ * Where the LUT moves each step of the ramp. A bar per step, up for brighter
+ * and down for darker, which reads the shape of the tone change directly.
+ */
+export function liftBars(lut: Lut, steps = 48): SVGSVGElement {
+  const w = steps;
+  const h = 22;
+  const mid = h / 2;
+  const svg = svgRoot(w, h);
+
+  svg.append(el('line', { x1: 0, y1: mid, x2: w, y2: mid, stroke: 'currentColor', 'stroke-width': 0.5, opacity: 0.3 }));
+
+  for (let i = 0; i < steps; i++) {
+    const t = i / (steps - 1);
+    const out = sampleLut(lut, [t, t, t]);
+    const luma = (out[0] + out[1] + out[2]) / 3;
+    // Scaled so a 0.25 move reaches the edge; bigger moves are clamped.
+    const d = Math.max(-1, Math.min(1, (luma - t) / 0.25));
+    const len = Math.abs(d) * mid;
+    svg.append(
+      el('rect', {
+        x: i, y: d >= 0 ? mid - len : mid, width: 1.02,
+        height: Math.max(len, 0.4),
+        fill: d >= 0 ? 'rgba(120,190,240,0.9)' : 'rgba(230,140,90,0.9)',
+      }),
+    );
   }
   return svg;
 }
@@ -60,7 +100,7 @@ export function rampStrip(lut: Lut, steps = 32): SVGSVGElement {
  * Neutral response against the identity diagonal, with the RGB channels
  * behind it. The gap between the curve and the diagonal is the LUT's contrast.
  */
-export function toneCurve(lut: Lut, samples = 64): SVGSVGElement {
+export function toneCurve(lut: Lut, samples = 96): SVGSVGElement {
   const size = 100;
   const svg = svgRoot(size, size);
   svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
@@ -108,13 +148,13 @@ export function toneCurve(lut: Lut, samples = 64): SVGSVGElement {
 /** A meter for a 0-1 fraction, amber past its threshold. */
 export function meter(fraction: number, threshold = 0.02): SVGSVGElement {
   const w = 100;
-  const h = 6;
+  const h = 10;
   const svg = svgRoot(w, h);
-  svg.append(el('rect', { x: 0, y: 0, width: w, height: h, rx: 3, fill: 'currentColor', opacity: 0.12 }));
-  const filled = Math.max(fraction > 0 ? 1.5 : 0, Math.min(1, fraction) * w);
+  svg.append(el('rect', { x: 0, y: 0, width: w, height: h, rx: 5, fill: 'currentColor', opacity: 0.12 }));
+  const filled = Math.max(fraction > 0 ? 2 : 0, Math.min(1, fraction) * w);
   svg.append(
     el('rect', {
-      x: 0, y: 0, width: filled, height: h, rx: 3,
+      x: 0, y: 0, width: filled, height: h, rx: 5,
       fill: fraction > threshold ? '#c8951a' : 'currentColor',
       opacity: fraction > threshold ? 1 : 0.55,
     }),
@@ -128,7 +168,7 @@ export function meter(fraction: number, threshold = 0.02): SVGSVGElement {
  */
 export function castBars(lut: Lut): SVGSVGElement {
   const w = 100;
-  const h = 34;
+  const h = 44;
   const svg = svgRoot(w, h);
   const zones: [string, number][] = [['SH', 0.2], ['MID', 0.5], ['HI', 0.8]];
   const colors = ['rgba(220,80,60,0.9)', 'rgba(80,190,100,0.9)', 'rgba(90,150,230,0.9)'];
@@ -142,12 +182,12 @@ export function castBars(lut: Lut): SVGSVGElement {
     for (let c = 0; c < 3; c++) {
       // Scaled so a 0.05 deviation reaches the edge — casts are small numbers.
       const dev = Math.max(-1, Math.min(1, (out[c] - mean) / 0.05));
-      const y = zi * 11.5 + c * 3 + 1;
+      const y = zi * 15 + c * 4 + 1;
       const len = (Math.abs(dev) * w) / 2;
       svg.append(
         el('rect', {
           x: dev >= 0 ? w / 2 : w / 2 - len,
-          y, width: Math.max(len, 0.6), height: 2, rx: 1, fill: colors[c],
+          y, width: Math.max(len, 0.8), height: 3, rx: 1.5, fill: colors[c],
         }),
       );
     }
@@ -157,19 +197,19 @@ export function castBars(lut: Lut): SVGSVGElement {
 
 /** Big swatch pair for a mapped point, e.g. black in -> black out. */
 export function swatchPair(input: RGB, output: RGB): SVGSVGElement {
-  const svg = svgRoot(100, 26);
+  const svg = svgRoot(100, 34);
   // Outlined, or a black swatch vanishes into a dark card and a white one
   // into a light card.
   const box = (x: number, rgb: RGB) =>
     el('rect', {
-      x, y: 0.5, width: 46, height: 25, rx: 3, fill: css(rgb),
+      x, y: 0.5, width: 46, height: 33, rx: 3, fill: css(rgb),
       stroke: 'currentColor', 'stroke-width': 1, 'stroke-opacity': 0.25,
     });
   svg.append(box(0, input));
   svg.append(box(54, output));
   svg.append(
     el('path', {
-      d: 'M47.5 13 L52.5 13 M50.5 10.5 L53 13 L50.5 15.5',
+      d: 'M47.5 17 L52.5 17 M50.5 14.5 L53 17 L50.5 19.5',
       stroke: 'currentColor', 'stroke-width': 1, fill: 'none', opacity: 0.5,
     }),
   );

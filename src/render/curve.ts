@@ -19,11 +19,14 @@ export class CurveView {
   private lut: Lut | null = null;
   /** Optional second LUT, drawn as a dashed overlay for comparison. */
   private compare: { lut: Lut; label: string } | null = null;
+  /** LUT strength, matching the other views. */
+  mix = 1;
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('2D canvas context unavailable');
     this.ctx = ctx;
+    // Cheap enough to keep up with a drag.
     window.addEventListener('resize', () => this.draw());
   }
 
@@ -41,7 +44,8 @@ export class CurveView {
     const { canvas, ctx } = this;
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
-    if (!w || !h || !this.lut) return;
+    // The panel is resizable; below this there is nothing meaningful to draw.
+    if (w < 24 || h < 24 || !this.lut) return;
 
     const dpr = window.devicePixelRatio || 1;
     canvas.width = w * dpr;
@@ -51,20 +55,26 @@ export class CurveView {
 
     ctx.fillStyle = '#131316';
     ctx.beginPath();
-    ctx.roundRect(0, 0, w, h, 4);
+    ctx.roundRect(0, 0, w, h, Math.min(4, w / 2, h / 2));
     ctx.fill();
 
-    const axis = neutralAxis(this.lut);
+    // Blend each plotted value back toward the identity ramp.
+    const raw = neutralAxis(this.lut);
+    const axis = raw.map((p) => ({
+      t: p.t,
+      rgb: p.rgb.map((v, i) => p.t + (v - p.t) * this.mix) as typeof p.rgb,
+    }));
+    void 0;
     if (axis.length < 2) return;
 
-    const pad = 20;
+    const pad = Math.min(20, w / 6, h / 6);
     const ip = 6;
-    const pw = w - pad * 2;
-    const ph = h - pad * 2;
+    const pw = Math.max(1, w - pad * 2);
+    const ph = Math.max(1, h - pad * 2);
 
     ctx.fillStyle = '#1b1b20';
     ctx.beginPath();
-    ctx.roundRect(pad, pad, pw, ph, 4);
+    ctx.roundRect(pad, pad, pw, ph, Math.min(4, pw / 2, ph / 2));
     ctx.fill();
 
     ctx.strokeStyle = 'rgba(255,255,255,0.05)';

@@ -32,8 +32,7 @@ uniform sampler3D uLut;
 uniform int  uSize;
 uniform bool uIs1D;
 uniform bool uTetrahedral;
-uniform float uSplit;      // 0 = all original, 1 = all graded
-uniform bool uShowSplit;
+uniform float uMix;        // 0 = original, 1 = full LUT
 uniform vec3 uDomainMin;
 uniform vec3 uDomainMax;
 // Region of the canvas the image actually covers, in UV. Everything outside
@@ -134,10 +133,9 @@ void main() {
     graded = uTetrahedral ? applyTetrahedral(p) : applyTrilinear(p);
   }
 
-  vec3 result = (uShowSplit && vUV.x < uSplit) ? src : graded;
-
-  // A thin marker on the split line so the boundary is unambiguous.
-  if (uShowSplit && abs(vUV.x - uSplit) < 0.0009) result = vec3(1.0, 0.35, 0.1);
+  // Dialling the LUT back toward the untouched source, the way a colorist
+  // would think of LUT strength.
+  vec3 result = mix(src, graded, uMix);
 
   fragColor = vec4(clamp(result, 0.0, 1.0), 1.0);
 }`;
@@ -165,8 +163,8 @@ export class PreviewRenderer {
   private sourceH = 0;
 
   interpolation: Interpolation = 'tetrahedral';
-  split = 0.5;
-  showSplit = true;
+  /** LUT strength, 0 = bypass, 1 = full. */
+  mix = 1;
   /** Fraction of the canvas the image covers: [x0, y0, x1, y1] in UV. */
   imageRect: [number, number, number, number] = [0, 0, 1, 1];
 
@@ -191,7 +189,7 @@ export class PreviewRenderer {
 
     for (const name of [
       'uSource', 'uLut', 'uSize', 'uIs1D', 'uTetrahedral',
-      'uSplit', 'uShowSplit', 'uDomainMin', 'uDomainMax', 'uImageRect',
+      'uMix', 'uDomainMin', 'uDomainMax', 'uImageRect',
     ]) {
       this.uniforms[name] = gl.getUniformLocation(program, name);
     }
@@ -270,22 +268,16 @@ export class PreviewRenderer {
   }
 
   /**
-   * Read back the fully graded frame, ignoring the split, for the scopes.
-   * Restores the split state so the visible preview is unchanged.
+   * Read back the rendered frame for the scopes, at the current mix — so the
+   * scopes show exactly what the image shows.
    */
   readGraded(): { data: Uint8Array; w: number; h: number } {
-    const wasSplit = this.showSplit;
-    this.showSplit = false;
-    this.draw();
-
     const gl = this.gl;
+    this.draw();
     const w = this.canvas.width;
     const h = this.canvas.height;
     const data = new Uint8Array(w * h * 4);
     gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, data);
-
-    this.showSplit = wasSplit;
-    this.draw();
     return { data, w, h };
   }
 
@@ -314,8 +306,7 @@ export class PreviewRenderer {
     gl.uniform1i(this.uniforms.uSize, lut.size);
     gl.uniform1i(this.uniforms.uIs1D, lut.dims === 1 ? 1 : 0);
     gl.uniform1i(this.uniforms.uTetrahedral, this.interpolation === 'tetrahedral' ? 1 : 0);
-    gl.uniform1f(this.uniforms.uSplit, this.split);
-    gl.uniform1i(this.uniforms.uShowSplit, this.showSplit ? 1 : 0);
+    gl.uniform1f(this.uniforms.uMix, this.mix);
     gl.uniform3fv(this.uniforms.uDomainMin, lut.domainMin);
     gl.uniform3fv(this.uniforms.uDomainMax, lut.domainMax);
     gl.uniform4fv(this.uniforms.uImageRect, this.imageRect);

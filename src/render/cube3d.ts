@@ -9,14 +9,19 @@
 import { type Lut, lutSampleCount } from '../core/lut.js';
 
 const VERT = `#version 300 es
-in vec3 aPos;      // output position, 0-1 in RGB space
+in vec3 aPos;       // LUT output position, 0-1 in RGB space
+in vec3 aIdentity;  // where this sample would sit untouched
 in vec3 aColor;
 uniform mat4 uMVP;
 uniform float uPointSize;
+uniform float uMix;
 out vec3 vColor;
 void main() {
-  vColor = aColor;
-  gl_Position = uMVP * vec4(aPos - 0.5, 1.0);
+  // At mix 0 the cloud is a perfect lattice; winding it up shows exactly how
+  // the LUT deforms it.
+  vec3 p = mix(aIdentity, aPos, uMix);
+  vColor = mix(aIdentity, aColor, uMix);
+  gl_Position = uMVP * vec4(p - 0.5, 1.0);
   // Keep distant points from vanishing entirely.
   gl_PointSize = uPointSize / max(gl_Position.w, 0.2);
 }`;
@@ -135,9 +140,13 @@ export class CubeView {
   private pointProgram: WebGLProgram;
   private lineProgram: WebGLProgram;
   private posBuf: WebGLBuffer;
+  private idBuf: WebGLBuffer;
   private colBuf: WebGLBuffer;
   private edgeBuf: WebGLBuffer;
   private count = 0;
+
+  /** LUT strength, matching the image preview. */
+  mix = 1;
 
   private yaw = 0.7;
   private pitch = 0.45;
@@ -154,6 +163,7 @@ export class CubeView {
     this.pointProgram = link(gl, VERT, FRAG);
     this.lineProgram = link(gl, LINE_VERT, LINE_FRAG);
     this.posBuf = gl.createBuffer()!;
+    this.idBuf = gl.createBuffer()!;
     this.colBuf = gl.createBuffer()!;
     this.edgeBuf = gl.createBuffer()!;
 
@@ -201,8 +211,26 @@ export class CubeView {
     const pos = new Float32Array(count * 3);
     for (let i = 0; i < count * 3; i++) pos[i] = lut.data[i];
 
+    // Where each sample sits before the LUT touches it.
+    const ident = new Float32Array(count * 3);
+    const n = lut.size;
+    const step = n > 1 ? 1 / (n - 1) : 0;
+    if (lut.dims === 1) {
+      for (let i = 0; i < count; i++) {
+        ident[i * 3] = ident[i * 3 + 1] = ident[i * 3 + 2] = i * step;
+      }
+    } else {
+      for (let i = 0; i < count; i++) {
+        ident[i * 3] = (i % n) * step;
+        ident[i * 3 + 1] = (Math.floor(i / n) % n) * step;
+        ident[i * 3 + 2] = Math.floor(i / (n * n)) * step;
+      }
+    }
+
     gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuf);
     gl.bufferData(gl.ARRAY_BUFFER, pos, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.idBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, ident, gl.STATIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.colBuf);
     gl.bufferData(gl.ARRAY_BUFFER, pos, gl.STATIC_DRAW);
 
@@ -245,6 +273,7 @@ export class CubeView {
     const size = this.count > 200000 ? 1.6 : this.count > 40000 ? 2.4 : 4.0;
     gl.uniform1f(gl.getUniformLocation(this.pointProgram, 'uPointSize'), size * dpr * 2.4);
     gl.uniform1f(gl.getUniformLocation(this.pointProgram, 'uAlpha'), this.count > 40000 ? 0.55 : 0.9);
+    gl.uniform1f(gl.getUniformLocation(this.pointProgram, 'uMix'), this.mix);
 
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -253,6 +282,11 @@ export class CubeView {
     const pLoc = gl.getAttribLocation(this.pointProgram, 'aPos');
     gl.enableVertexAttribArray(pLoc);
     gl.vertexAttribPointer(pLoc, 3, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.idBuf);
+    const iLoc = gl.getAttribLocation(this.pointProgram, 'aIdentity');
+    gl.enableVertexAttribArray(iLoc);
+    gl.vertexAttribPointer(iLoc, 3, gl.FLOAT, false, 0, 0);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.colBuf);
     const cLoc = gl.getAttribLocation(this.pointProgram, 'aColor');

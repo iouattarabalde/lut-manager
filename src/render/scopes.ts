@@ -20,9 +20,16 @@ function frame(ctx: CanvasRenderingContext2D, w: number, h: number): void {
   ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = PANEL;
   ctx.beginPath();
-  ctx.roundRect(0, 0, w, h, 4);
+  // roundRect throws on a radius larger than half the shorter side.
+  ctx.roundRect(0, 0, w, h, Math.min(4, w / 2, h / 2));
   ctx.fill();
 }
+
+/**
+ * Below this the scope is too small to read, and the geometry starts
+ * producing negative radii. The panel is resizable, so this is reachable.
+ */
+const MIN_SIZE = 24;
 
 /**
  * RGB-overlay waveform. Columns map to image columns, height to code value,
@@ -35,7 +42,7 @@ export function drawWaveform(
   h: number,
 ): void {
   frame(ctx, w, h);
-  if (!px.w || !px.h) return;
+  if (!px.w || !px.h || w < MIN_SIZE || h < MIN_SIZE) return;
 
   const pad = 6;
   const gw = Math.max(1, Math.floor(w - pad * 2));
@@ -115,12 +122,13 @@ export function drawVectorscope(
   h: number,
 ): void {
   frame(ctx, w, h);
-  if (!px.w || !px.h) return;
+  if (!px.w || !px.h || w < MIN_SIZE || h < MIN_SIZE) return;
 
   const size = Math.min(w, h);
   const cx = w / 2;
   const cy = h / 2;
-  const radius = size / 2 - 8;
+  // Never let the inset drive this negative on a narrow panel.
+  const radius = Math.max(4, size / 2 - 8);
 
   // Graticule: rings and cross hairs.
   ctx.strokeStyle = 'rgba(255,255,255,0.14)';
