@@ -9,7 +9,7 @@
  */
 
 import { type Lut } from '../core/lut.js';
-import { PreviewRenderer, type Interpolation } from '../render/preview.js';
+import { PreviewRenderer } from '../render/preview.js';
 import { CHARTS, type ChartId, renderChart } from '../render/charts.js';
 import { drawVectorscope, drawWaveform } from '../render/scopes.js';
 import { CubeView } from '../render/cube3d.js';
@@ -168,7 +168,10 @@ function updateNote(): void {
 
 export function setLut(next: Lut | null): void {
   lut = next;
-  $('mixRow').hidden = !next;
+  if (!next) {
+    $('mixRow').hidden = true;
+    $('bypassRow').hidden = true;
+  }
   const r = ensureRenderer();
   if (!r) return;
   r.mix = mixValue;
@@ -283,7 +286,14 @@ function showTab(which: Tab): void {
   // The cube plots the LUT itself; the source and encoding controls don't
   // apply to it.
   $('previewControls').hidden = which === 'curve' || which === 'cube';
-  $('mixRow').hidden = !lut;
+
+  // The image and the scopes get a bypass switch rather than a slider: the
+  // scopes read back a full frame and walk it per change, which cannot keep
+  // up with a drag, and A/B is what these two views are actually for.
+  const graded = which === 'image' || which === 'scopes';
+  $('mixRow').hidden = !lut || graded;
+  $('bypassRow').hidden = !lut || !graded;
+  if (graded && mixValue !== 0 && mixValue !== 1) setMix(1);
 
   if (which === 'curve') {
     canvas().hidden = true;
@@ -325,10 +335,16 @@ export function setMix(next: number): void {
   mixValue = Math.max(0, Math.min(1, next));
   $<HTMLInputElement>('pvMix').value = String(Math.round(mixValue * 100));
   $('pvMixValue').textContent = `${Math.round(mixValue * 100)}%`;
+  $('pvOn').classList.toggle('active', mixValue === 1);
+  $('pvOff').classList.toggle('active', mixValue === 0);
   if (renderer) renderer.mix = mixValue;
   if (cube) cube.mix = mixValue;
   onMixChange(mixValue);
-  redraw();
+
+  // Mix is a shader uniform, so the image only needs a redraw — regenerating
+  // and re-uploading the source texture on every step was the lag.
+  if (activeTab === 'image' && renderer) renderer.draw();
+  else redraw();
 }
 
 export function mix(): number {
@@ -391,21 +407,11 @@ export function init(onMix: (mix: number) => void = () => {}): void {
     redraw();
   });
 
-  const setInterp = (mode: Interpolation) => {
-    $('pvTetra').classList.toggle('active', mode === 'tetrahedral');
-    $('pvTri').classList.toggle('active', mode === 'trilinear');
-    if (renderer) {
-      renderer.interpolation = mode;
-      redraw();
-    }
-  };
-  $('pvTetra').addEventListener('click', () => setInterp('tetrahedral'));
-  $('pvTri').addEventListener('click', () => setInterp('trilinear'));
-
   const mix = $<HTMLInputElement>('pvMix');
-  mix.addEventListener('input', () => {
-    setMix(Number(mix.value) / 100);
-  });
+  mix.addEventListener('input', () => setMix(Number(mix.value) / 100));
+
+  $('pvOn').addEventListener('click', () => setMix(1));
+  $('pvOff').addEventListener('click', () => setMix(0));
 
   // Redrawing the scopes means a full readPixels plus a CPU pass over every
   // pixel, so coalesce bursts of resizes into one redraw at the end.

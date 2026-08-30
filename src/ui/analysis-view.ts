@@ -17,7 +17,9 @@ import {
   rampStrip,
   swatchPair,
   toneCurve,
+  zoneSwatches,
 } from '../render/analysis-graphics.js';
+import { describe as describeLut } from '../core/describe.js';
 import { $ } from './dom.js';
 
 const pct = (v: number): string =>
@@ -61,10 +63,24 @@ export function render(lut: Lut | null, subject = ''): void {
   if (!lut) {
     box.replaceChildren();
     checksBox.replaceChildren();
+    $('analysisSummary').replaceChildren();
     return;
   }
 
   const m = analyze(lut);
+  const summary = describeLut(lut, m);
+  renderSummary(summary);
+
+  const zoneLabels = summary.zones
+    .map((z) => {
+      const level =
+        Math.abs(z.levelShift) < 0.02
+          ? 'held'
+          : `${z.levelShift > 0 ? 'up' : 'down'} ${Math.round(Math.abs(z.levelShift) * 100)}%`;
+      const tint = z.tint === 'neutral' ? 'neutral' : z.tint;
+      return `${z.name.toLowerCase()} ${level}, ${tint}`;
+    })
+    .join(' · ');
 
   const cards: Card[] = [
     {
@@ -75,6 +91,12 @@ export function render(lut: Lut | null, subject = ''): void {
       visual: rampStrip(lut),
       wide: true,
       bad: m.isIdentity,
+    },
+    {
+      title: 'Shadows · Midtones · Highlights',
+      caption: zoneLabels,
+      visual: zoneSwatches(summary.zones),
+      wide: true,
     },
     {
       title: 'Where it moves each tone',
@@ -128,6 +150,24 @@ export function render(lut: Lut | null, subject = ''): void {
 
   box.replaceChildren(...cards.map(buildCard));
   renderChecks(checksBox, runChecks(lut, m));
+}
+
+/** The read-aloud summary: a headline plus the supporting observations. */
+function renderSummary(summary: { headline: string; points: string[] }): void {
+  const box = $('analysisSummary');
+  const headline = document.createElement('p');
+  headline.className = 'summary-headline';
+  headline.textContent = summary.headline;
+
+  const list = document.createElement('ul');
+  list.className = 'summary-points';
+  for (const point of summary.points) {
+    const li = document.createElement('li');
+    li.textContent = point;
+    list.append(li);
+  }
+
+  box.replaceChildren(headline, list);
 }
 
 function buildCard(card: Card): HTMLElement {

@@ -4,7 +4,8 @@
  * hardware it is headed for.
  */
 
-import { type Lut, getSample, index3D, lutSampleCount, neutralAxis } from './lut.js';
+import { type Lut, type RGB, getSample, index3D, lutSampleCount, neutralAxis } from './lut.js';
+import { sampleLut } from './sample.js';
 
 export interface Check {
   level: 'error' | 'warning' | 'info';
@@ -31,6 +32,8 @@ export interface Metrics {
   neutralMonotonic: boolean;
   /** Largest deviation from the identity transform, per channel, 0..1. */
   maxDeviation: number;
+  /** Output chroma over input chroma across a hue sweep. 1 = unchanged. */
+  saturation: number;
 }
 
 const EPS = 1e-4;
@@ -95,6 +98,7 @@ export function analyze(lut: Lut): Metrics {
   }
 
   return {
+    saturation: saturationRatio(lut),
     clippedLow: clippedLow / (count * 3),
     clippedHigh: clippedHigh / (count * 3),
     blackPoint: blackPoint as [number, number, number],
@@ -106,6 +110,44 @@ export function analyze(lut: Lut): Metrics {
     neutralMonotonic,
     maxDeviation,
   };
+}
+
+/**
+ * How much the LUT opens or closes saturation, measured as output chroma over
+ * input chroma across a sweep of moderately saturated hues. Chroma is simply
+ * max minus min of RGB, which is what a vectorscope trace length reflects.
+ */
+function saturationRatio(lut: Lut): number {
+  const chroma = (rgb: RGB): number => Math.max(...rgb) - Math.min(...rgb);
+  let inSum = 0;
+  let outSum = 0;
+
+  for (let i = 0; i < 12; i++) {
+    const hue = i / 12;
+    for (const value of [0.35, 0.6, 0.85]) {
+      const probe = hsv(hue, 0.6, value);
+      const out = sampleLut(lut, probe);
+      inSum += chroma(probe);
+      outSum += chroma(out);
+    }
+  }
+  return inSum > 1e-6 ? outSum / inSum : 1;
+}
+
+function hsv(h: number, s: number, v: number): RGB {
+  const i = Math.floor(h * 6);
+  const f = h * 6 - i;
+  const p = v * (1 - s);
+  const q = v * (1 - f * s);
+  const t = v * (1 - (1 - f) * s);
+  switch (i % 6) {
+    case 0: return [v, t, p];
+    case 1: return [q, v, p];
+    case 2: return [p, v, t];
+    case 3: return [p, q, v];
+    case 4: return [t, p, v];
+    default: return [v, p, q];
+  }
 }
 
 /**

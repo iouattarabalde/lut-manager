@@ -12,8 +12,9 @@ export interface Pixels {
   h: number;
 }
 
-const BG = '#131316';
-const PANEL = '#1b1b20';
+const BG = '#08080a';
+// Near-black, so a sparse trace still reads against it.
+const PANEL = '#0b0b0e';
 
 function frame(ctx: CanvasRenderingContext2D, w: number, h: number): void {
   ctx.fillStyle = BG;
@@ -131,7 +132,7 @@ export function drawVectorscope(
   const radius = Math.max(4, size / 2 - 8);
 
   // Graticule: rings and cross hairs.
-  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.20)';
   ctx.lineWidth = 0.5;
   for (const r of [0.25, 0.5, 0.75, 1]) {
     ctx.beginPath();
@@ -145,13 +146,15 @@ export function drawVectorscope(
   ctx.lineTo(cx, cy + radius);
   ctx.stroke();
 
-  // Scatter, accumulated into a density buffer rather than drawn point by
-  // point: a chart with few distinct colors would otherwise be almost
-  // invisible, while a photograph would blow out.
+  // Scatter. Hue and density are accumulated separately: summing colour
+  // additively drives every channel to full where the trace is dense, which
+  // turns a saturated trace white. Averaging the colour keeps the hue and
+  // letting density drive brightness keeps the shape.
   const step = Math.max(1, Math.floor(Math.sqrt((px.w * px.h) / 120000)));
   const sw = Math.max(1, Math.round(w));
   const sh = Math.max(1, Math.round(h));
   const acc = new Float32Array(sw * sh * 3);
+  const count = new Float32Array(sw * sh);
   let peak = 0;
 
   for (let y = 0; y < px.h; y += step) {
@@ -163,21 +166,30 @@ export function drawVectorscope(
       const luma = KR * r + KG * g + KB * b;
       const cb = (b - luma) / (2 * (1 - KB));
       const cr = (r - luma) / (2 * (1 - KR));
+
+      // Saturate the plotted colour so a desaturated frame still shows hue.
+      const minC = Math.min(r, g, b);
+      const range = Math.max(r, g, b) - minC;
+      const boost = range > 1e-4 ? 1 / range : 0;
+      const sr = range > 1e-4 ? (r - minC) * boost : 1;
+      const sg = range > 1e-4 ? (g - minC) * boost : 1;
+      const sb = range > 1e-4 ? (b - minC) * boost : 1;
+
       const dx = Math.round(cx + cb * radius * 2);
       const dy = Math.round(cy - cr * radius * 2);
-      // Splat over a small footprint: a single device pixel is invisible on
-      // a high-DPR canvas.
+
       for (let oy = 0; oy < 2; oy++) {
         for (let ox = 0; ox < 2; ox++) {
           const px2 = dx + ox;
           const py2 = dy + oy;
           if (px2 < 0 || py2 < 0 || px2 >= sw || py2 >= sh) continue;
-          const i = (py2 * sw + px2) * 3;
-          acc[i] += r;
-          acc[i + 1] += g;
-          acc[i + 2] += b;
-          const m = Math.max(acc[i], acc[i + 1], acc[i + 2]);
-          if (m > peak) peak = m;
+          const idx = py2 * sw + px2;
+          const i = idx * 3;
+          acc[i] += sr;
+          acc[i + 1] += sg;
+          acc[i + 2] += sb;
+          count[idx] += 1;
+          if (count[idx] > peak) peak = count[idx];
         }
       }
     }
@@ -186,15 +198,17 @@ export function drawVectorscope(
   if (peak > 0) {
     const img = ctx.createImageData(sw, sh);
     for (let i = 0; i < sw * sh; i++) {
-      let any = 0;
-      for (let c = 0; c < 3; c++) {
-        // Cube root keeps sparse points visible without crushing dense ones.
-        const d = Math.cbrt(acc[i * 3 + c] / peak);
-        const v = Math.min(255, Math.round(d * 255));
-        img.data[i * 4 + c] = v;
-        if (v > any) any = v;
-      }
-      img.data[i * 4 + 3] = any;
+      const n = count[i];
+      if (n === 0) continue;
+      // Cube root so a single sample still reads, with a floor beneath it.
+      const brightness = Math.max(0.55, Math.cbrt(n / peak));
+      const r = (acc[i * 3] / n) * brightness;
+      const g = (acc[i * 3 + 1] / n) * brightness;
+      const b = (acc[i * 3 + 2] / n) * brightness;
+      img.data[i * 4] = Math.min(255, Math.round(r * 255));
+      img.data[i * 4 + 1] = Math.min(255, Math.round(g * 255));
+      img.data[i * 4 + 2] = Math.min(255, Math.round(b * 255));
+      img.data[i * 4 + 3] = 255;
     }
     const tmp = document.createElement('canvas');
     tmp.width = sw;

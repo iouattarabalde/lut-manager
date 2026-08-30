@@ -67,6 +67,39 @@ export function rampStrip(lut: Lut, steps = 64): SVGSVGElement {
 }
 
 /**
+ * Shadows, midtones and highlights as before/after swatches, so the actual
+ * colours can be pointed at and named in conversation.
+ */
+export function zoneSwatches(
+  zones: { name: string; input: RGB; output: RGB }[],
+): SVGSVGElement {
+  const w = 100;
+  const rowH = 22;
+  const gap = 4;
+  const h = zones.length * rowH + (zones.length - 1) * gap;
+  const svg = svgRoot(w, h);
+  svg.setAttribute('preserveAspectRatio', 'none');
+
+  zones.forEach((z, i) => {
+    const y = i * (rowH + gap);
+    const box = (x: number, width: number, rgb: RGB) =>
+      el('rect', {
+        x, y: y + 0.5, width, height: rowH - 1, rx: 2, fill: css(rgb),
+        stroke: 'currentColor', 'stroke-width': 0.8, 'stroke-opacity': 0.28,
+      });
+    svg.append(box(0, 44, z.input));
+    svg.append(box(56, 44, z.output));
+    svg.append(
+      el('path', {
+        d: `M46.5 ${y + rowH / 2} L54 ${y + rowH / 2} M51.5 ${y + rowH / 2 - 2.5} L54 ${y + rowH / 2} L51.5 ${y + rowH / 2 + 2.5}`,
+        stroke: 'currentColor', 'stroke-width': 1, fill: 'none', opacity: 0.5,
+      }),
+    );
+  });
+  return svg;
+}
+
+/**
  * Where the LUT moves each step of the ramp. A bar per step, up for brighter
  * and down for darker, which reads the shape of the tone change directly.
  */

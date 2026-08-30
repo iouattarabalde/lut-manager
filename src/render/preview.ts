@@ -1,16 +1,15 @@
 /**
  * WebGL2 image preview: applies a LUT to a source image on the GPU.
  *
- * Interpolation is done in the shader with texelFetch rather than by hardware
- * texture filtering. That costs a few lines but buys two things: tetrahedral
- * interpolation, which is what Resolve and most LUT hardware actually use and
- * which differs visibly from trilinear on saturated colors; and freedom from
- * OES_texture_float_linear, which is not universally available.
+ * Interpolation is tetrahedral, done in the shader with texelFetch rather
+ * than by hardware texture filtering. That costs a few lines but buys two
+ * things: tetrahedral interpolation at all, which is what Resolve and most
+ * LUT hardware use; and freedom from OES_texture_float_linear, which is not
+ * universally available. (src/core/sample.ts keeps a trilinear implementation
+ * for the tests that compare the two.)
  */
 
 import { type Lut, lutSampleCount } from '../core/lut.js';
-
-export type Interpolation = 'tetrahedral' | 'trilinear';
 
 const VERT = `#version 300 es
 in vec2 aPos;
@@ -31,7 +30,6 @@ uniform sampler2D uSource;
 uniform sampler3D uLut;
 uniform int  uSize;
 uniform bool uIs1D;
-uniform bool uTetrahedral;
 uniform float uMix;        // 0 = original, 1 = full LUT
 uniform vec3 uDomainMin;
 uniform vec3 uDomainMax;
@@ -55,24 +53,6 @@ vec3 apply1D(vec3 rgb) {
     outc[c] = mix(a, b, f);
   }
   return outc;
-}
-
-vec3 applyTrilinear(vec3 p) {
-  ivec3 i = ivec3(floor(p));
-  vec3 f = p - floor(p);
-  vec3 c000 = fetch3(i + ivec3(0,0,0));
-  vec3 c100 = fetch3(i + ivec3(1,0,0));
-  vec3 c010 = fetch3(i + ivec3(0,1,0));
-  vec3 c110 = fetch3(i + ivec3(1,1,0));
-  vec3 c001 = fetch3(i + ivec3(0,0,1));
-  vec3 c101 = fetch3(i + ivec3(1,0,1));
-  vec3 c011 = fetch3(i + ivec3(0,1,1));
-  vec3 c111 = fetch3(i + ivec3(1,1,1));
-  vec3 x00 = mix(c000, c100, f.x);
-  vec3 x10 = mix(c010, c110, f.x);
-  vec3 x01 = mix(c001, c101, f.x);
-  vec3 x11 = mix(c011, c111, f.x);
-  return mix(mix(x00, x10, f.y), mix(x01, x11, f.y), f.z);
 }
 
 // Standard six-tetrahedron decomposition of the unit cell.
@@ -130,7 +110,7 @@ void main() {
     // Normalise through the LUT's domain before indexing the grid.
     vec3 n = (src - uDomainMin) / max(uDomainMax - uDomainMin, vec3(1e-6));
     vec3 p = clamp(n, 0.0, 1.0) * float(uSize - 1);
-    graded = uTetrahedral ? applyTetrahedral(p) : applyTrilinear(p);
+    graded = applyTetrahedral(p);
   }
 
   // Dialling the LUT back toward the untouched source, the way a colorist
@@ -162,7 +142,6 @@ export class PreviewRenderer {
   private sourceW = 0;
   private sourceH = 0;
 
-  interpolation: Interpolation = 'tetrahedral';
   /** LUT strength, 0 = bypass, 1 = full. */
   mix = 1;
   /** Fraction of the canvas the image covers: [x0, y0, x1, y1] in UV. */
@@ -188,7 +167,7 @@ export class PreviewRenderer {
     gl.useProgram(program);
 
     for (const name of [
-      'uSource', 'uLut', 'uSize', 'uIs1D', 'uTetrahedral',
+      'uSource', 'uLut', 'uSize', 'uIs1D',
       'uMix', 'uDomainMin', 'uDomainMax', 'uImageRect',
     ]) {
       this.uniforms[name] = gl.getUniformLocation(program, name);
@@ -305,7 +284,6 @@ export class PreviewRenderer {
     gl.uniform1i(this.uniforms.uLut, 1);
     gl.uniform1i(this.uniforms.uSize, lut.size);
     gl.uniform1i(this.uniforms.uIs1D, lut.dims === 1 ? 1 : 0);
-    gl.uniform1i(this.uniforms.uTetrahedral, this.interpolation === 'tetrahedral' ? 1 : 0);
     gl.uniform1f(this.uniforms.uMix, this.mix);
     gl.uniform3fv(this.uniforms.uDomainMin, lut.domainMin);
     gl.uniform3fv(this.uniforms.uDomainMax, lut.domainMax);

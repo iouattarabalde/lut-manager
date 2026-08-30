@@ -30,9 +30,9 @@
     <div class="lut-viz" id="lutViz">
       <div class="viz-tabs">
         <button class="viz-tab active" id="tabCurve" type="button">Curve</button>
+        <button class="viz-tab" id="tabCube" type="button">Cube</button>
         <button class="viz-tab" id="tabImage" type="button">Image</button>
         <button class="viz-tab" id="tabScopes" type="button">Scopes</button>
-        <button class="viz-tab" id="tabCube" type="button">Cube</button>
       </div>
 
       <div class="viz-stage">
@@ -52,6 +52,14 @@
         <output class="mix-value" id="pvMixValue" for="pvMix">100%</output>
       </div>
 
+      <div class="mix-row" id="bypassRow" hidden>
+        <span class="pc-label">LUT</span>
+        <div class="pc-seg">
+          <button class="pc-seg-btn active" id="pvOn" type="button">On</button>
+          <button class="pc-seg-btn" id="pvOff" type="button">Off</button>
+        </div>
+      </div>
+
       <div class="preview-controls" id="previewControls" hidden>
         <div class="pc-row">
           <label class="pc-label" for="pvSource">Source</label>
@@ -62,13 +70,6 @@
           <select class="pc-select" id="pvEncoding"></select>
         </div>
         <div class="pc-note" id="pvNote"></div>
-        <div class="pc-row">
-          <span class="pc-label">Interp</span>
-          <div class="pc-seg">
-            <button class="pc-seg-btn active" id="pvTetra" type="button">Tetrahedral</button>
-            <button class="pc-seg-btn" id="pvTri" type="button">Trilinear</button>
-          </div>
-        </div>
       </div>
 
       <!-- invisible drop overlay so you can still drop onto the viz -->
@@ -340,6 +341,7 @@
           <span class="section-title">Analysis</span>
           <span class="section-key" id="analysisSubject">—</span>
         </div>
+        <div class="analysis-summary" id="analysisSummary"></div>
         <div class="metrics" id="metrics"></div>
         <div class="checks" id="checks"></div>
       </div>
