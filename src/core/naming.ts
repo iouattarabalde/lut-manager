@@ -82,11 +82,11 @@ export function csToken(label: string): string {
 /**
  * Exposure compensation token: `+E1stop`, `+E1_5stop`, `+E1_33stop`,
  * `+E0_33stop`. Sign first, decimal point written as `_`, no fractional part
- * on a whole stop.
+ * on a whole stop, and omitted entirely at zero.
  *
- * The resolve-naming-conventions skill shows `E+00` (sign after the E,
- * zero-padded) in its LUT-file row. Ismael confirmed the form implemented here
- * on 2026-08-28, so that row of the skill is what needs updating.
+ * Matches the Exposure Compensation table in the resolve-naming-conventions
+ * skill, which was corrected to this form on 2026-08-29. Every row of that
+ * table is asserted in test/naming.test.ts.
  */
 export function exposureToken(raw: string): string {
   const n = parseFloat(raw);

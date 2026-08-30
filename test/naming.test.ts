@@ -11,19 +11,39 @@ import {
 } from '../src/core/naming.js';
 
 describe('exposure token', () => {
-  // The form Ismael confirmed on 2026-08-28.
-  it('matches the house convention', () => {
-    expect(exposureToken('+1')).toBe('+E1stop');
-    expect(exposureToken('+1.5')).toBe('+E1_5stop');
-    expect(exposureToken('+1.33')).toBe('+E1_33stop');
-    expect(exposureToken('+0.33')).toBe('+E0_33stop');
-    expect(exposureToken('-0.67')).toBe('-E0_67stop');
-    expect(exposureToken('-2.67')).toBe('-E2_67stop');
-  });
+  /**
+   * Every row of the Exposure Compensation table in the
+   * resolve-naming-conventions skill. If the skill changes, this fails.
+   */
+  const SKILL_TABLE: [string, string, string][] = [
+    ['0',     '',           'Warm_ArriLogC4_Rec709'],
+    ['+0.33', '+E0_33stop', 'Warm_ArriLogC4_Rec709_+E0_33stop'],
+    ['+0.5',  '+E0_5stop',  'Warm_ArriLogC4_Rec709_+E0_5stop'],
+    ['+0.67', '+E0_67stop', 'Warm_ArriLogC4_Rec709_+E0_67stop'],
+    ['+1',    '+E1stop',    'Warm_ArriLogC4_Rec709_+E1stop'],
+    ['+1.33', '+E1_33stop', 'Warm_ArriLogC4_Rec709_+E1_33stop'],
+    ['+1.5',  '+E1_5stop',  'Warm_ArriLogC4_Rec709_+E1_5stop'],
+    ['-0.67', '-E0_67stop', 'Warm_ArriLogC4_Rec709_-E0_67stop'],
+    ['-2.67', '-E2_67stop', 'Warm_ArriLogC4_Rec709_-E2_67stop'],
+  ];
 
-  it('is empty at zero', () => {
-    expect(exposureToken('0')).toBe('');
+  for (const [shift, token, filename] of SKILL_TABLE) {
+    it(`${shift} renders as ${token || '(omitted)'}`, () => {
+      expect(exposureToken(shift)).toBe(token);
+      expect(
+        applyTemplate(DEFAULT_TEMPLATE, {
+          look: 'Warm',
+          source: 'ArriLogC4',
+          dest: 'Rec709',
+          exp: token,
+        }),
+      ).toBe(filename);
+    });
+  }
+
+  it('omits the token for a missing or unparseable value', () => {
     expect(exposureToken('')).toBe('');
+    expect(exposureToken('nonsense')).toBe('');
     expect(exposureSuffix('0')).toBe('');
     expect(exposureSuffix('+1')).toBe('_+E1stop');
   });

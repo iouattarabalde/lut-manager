@@ -123,10 +123,10 @@ if there is one, otherwise the skin-tone chart, since patch charts make looks ha
 apart. Something to send with a package so the people receiving it can see what they were
 given without opening Resolve.
 
-> **Note on the exposure token.** The `resolve-naming-conventions` skill shows `E+00` in its
-> LUT-file row (sign after the `E`, zero-padded). The form implemented here — `+E1stop`,
-> `+E1_5stop`, `+E1_33stop`, `+E0_33stop` — is the one Ismael confirmed on 2026-08-28. That
-> row of the skill is what needs reconciling.
+The exposure token is `+E1stop`, `+E1_5stop`, `+E1_33stop`, `+E0_33stop` — sign first,
+decimal point as `_`, no fractional part on a whole stop, omitted entirely at zero. This
+matches the Exposure Compensation table in the `resolve-naming-conventions` skill, and every
+row of that table is asserted in `test/naming.test.ts` so the two cannot drift.
 
 ### What it guarantees
 
