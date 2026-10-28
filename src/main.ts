@@ -10,9 +10,9 @@ import './styles.css';
 import { type Lut } from './core/lut.js';
 import { type ParseIssue, parseCube, writeCube } from './format/cube.js';
 import { CurveView } from './render/curve.js';
-import { exposureSuffix } from './core/naming.js';
+import { exposureSuffix, normalizeStops } from './core/naming.js';
 import { $, download, esc, fmtSize, setVal, toast, today, val } from './ui/dom.js';
-import { populateCS, populateExposure } from './ui/colorspaces.js';
+import { exposureValue, populateCS, wireExposure } from './ui/colorspaces.js';
 import * as batch from './ui/batch-view.js';
 import * as preview from './ui/preview-view.js';
 import * as ops from './ui/ops-view.js';
@@ -25,7 +25,6 @@ import { writeClf } from './format/clf.js';
 let lut: Lut | null = null;
 let srcFileName = '';
 
-populateExposure($<HTMLSelectElement>('fieldExpShift'));
 populateCS($<HTMLSelectElement>('selInputCS'), 'Input');
 populateCS($<HTMLSelectElement>('selOutputCS'), 'Output');
 
@@ -88,28 +87,42 @@ async function loadFile(file: File): Promise<void> {
   syncFilename();
   updatePreview();
   showViz();
+  if (edited.size) toast(`Kept the fields you filled — ↺ Reset to start from this file's header`);
+}
+
+/**
+ * Fields the user has typed into since the last Reset. Loading another LUT
+ * keeps these and only fills the rest from the new file's header, so a
+ * stack of LUTs can be stamped one after another without retyping.
+ */
+const edited = new Set<string>();
+
+/** Field id -> the one that records the edit (custom CS boxes count as their select). */
+const EDIT_KEY: Record<string, string> = {
+  customInputCS: 'selInputCS',
+  customOutputCS: 'selOutputCS',
+};
+
+function markEdited(id: string): void {
+  edited.add(EDIT_KEY[id] ?? id);
 }
 
 function applyMetaToFields(l: Lut): void {
-  setVal('fieldTitle', l.meta.title);
-  setVal('fieldAuthor', l.meta.author);
-  setVal('fieldDate', l.meta.date || today());
-  setVal('fieldProject', l.meta.project);
-  setVal('fieldNotes', l.meta.notes);
+  const fill = (id: string, v: string) => {
+    if (!edited.has(id)) setVal(id, v);
+  };
+  fill('fieldTitle', l.meta.title);
+  fill('fieldAuthor', l.meta.author);
+  fill('fieldDate', l.meta.date || today());
+  fill('fieldProject', l.meta.project);
+  fill('fieldNotes', l.meta.notes);
 
-  const expSel = $<HTMLSelectElement>('fieldExpShift');
-  const expNum = parseFloat(l.meta.expShift);
-  if (Number.isFinite(expNum)) {
-    const match = Array.from(expSel.options).find(
-      (o) => parseFloat(o.value) === expNum,
-    );
-    expSel.value = match ? match.value : '0';
-  } else {
-    expSel.value = '0';
-  }
+  const exp = normalizeStops(l.meta.expShift) ?? '0';
+  fill('fieldExpShift', exp === '0' ? '' : exp);
+  $('fieldExpShift').classList.remove('invalid');
 
-  applyCS('Input', l.meta.inputCS);
-  applyCS('Output', l.meta.outputCS);
+  if (!edited.has('selInputCS')) applyCS('Input', l.meta.inputCS);
+  if (!edited.has('selOutputCS')) applyCS('Output', l.meta.outputCS);
 }
 
 function applyCS(dir: 'Input' | 'Output', value: string): void {
@@ -177,7 +190,7 @@ function getCS(dir: 'Input' | 'Output'): string {
 
 /** Push the form state onto the model. Never touches sample data. */
 function collectMeta(l: Lut): void {
-  const exp = val('fieldExpShift');
+  const exp = exposureValue($<HTMLInputElement>('fieldExpShift'));
   l.meta = {
     title: val('fieldTitle'),
     author: val('fieldAuthor'),
@@ -241,7 +254,7 @@ function syncFilename(): void {
   const base = title
     ? toFilename(title)
     : toFilename(srcFileName.replace(/\.[^.]+$/, '')) || 'output';
-  setVal('fieldFilename', base + exposureSuffix(val('fieldExpShift')) + '.cube');
+  setVal('fieldFilename', base + exposureSuffix(exposureValue($<HTMLInputElement>('fieldExpShift'))) + '.cube');
 }
 
 function resetFilenameToggle(): void {
@@ -264,8 +277,10 @@ const TEXT_FIELDS = [
 ];
 
 function resetFields(): void {
+  edited.clear();
   TEXT_FIELDS.forEach((id) => setVal(id, ''));
-  $<HTMLSelectElement>('fieldExpShift').value = '0';
+  setVal('fieldExpShift', '');
+  $('fieldExpShift').classList.remove('invalid');
   setVal('fieldDate', today());
   (['selInputCS', 'selOutputCS'] as const).forEach((id) => {
     $<HTMLSelectElement>(id).value = '';
@@ -290,7 +305,7 @@ function clearAll(): void {
   $('emptyState').style.display = '';
   $<HTMLInputElement>('fileInput').value = '';
   renderIssues([]);
-  resetFields();
+  // Typed fields survive a clear; only ↺ Reset wipes them.
   setVal('fieldFilename', '');
   hideViz();
 }
@@ -302,6 +317,10 @@ function showViz(): void {
   $('lutViz').classList.add('show');
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
+      if (batch.isActive()) {
+        batch.reselect();
+        return;
+      }
       const shown = ops.outputLut() ?? lut;
       curve.setLut(shown);
       preview.setLut(shown);
@@ -368,6 +387,7 @@ $('btnClear').addEventListener('click', clearAll);
       wrap.classList.remove('show');
       setVal(`custom${dir}CS`, '');
     }
+    markEdited(`sel${dir}CS`);
     updatePreview();
   });
 });
@@ -381,7 +401,8 @@ $<HTMLInputElement>('chkCustomFilename').addEventListener('change', function (th
 });
 
 $('fieldTitle').addEventListener('input', syncFilename);
-$('fieldExpShift').addEventListener('change', () => {
+wireExposure($<HTMLInputElement>('fieldExpShift'), () => {
+  markEdited('fieldExpShift');
   syncFilename();
   updatePreview();
 });
@@ -393,7 +414,12 @@ $('fieldExpShift').addEventListener('change', () => {
   'fieldNotes',
   'customInputCS',
   'customOutputCS',
-].forEach((id) => $(id).addEventListener('input', updatePreview));
+].forEach((id) =>
+  $(id).addEventListener('input', () => {
+    markEdited(id);
+    updatePreview();
+  }),
+);
 
 $('btnReset').addEventListener('click', () => {
   resetFields();

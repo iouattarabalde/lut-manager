@@ -1,19 +1,15 @@
 /**
  * Analysis panel.
  *
- * Built around pictures rather than a column of numbers: what the LUT does to
- * a grey ramp, where its curve sits against identity, how much it clips, and
- * which way it pushes colour. Figures stay as captions on the visuals that
- * explain them.
+ * One sentence, then four pictures: the grey ramp, the three tonal zones, the
+ * tone curve, and where black and white land. Anything only a number can say
+ * (clipping, odd sizes) shows up as a check below, and only when it matters.
  */
 
 import { type Lut } from '../core/lut.js';
 import { type Check, analyze } from '../core/analyze.js';
 import { runChecks } from '../core/analyze.js';
 import {
-  castBars,
-  liftBars,
-  meter,
   rampStrip,
   swatchPair,
   toneCurve,
@@ -22,14 +18,11 @@ import {
 import { describe as describeLut } from '../core/describe.js';
 import { $ } from './dom.js';
 
-const pct = (v: number): string =>
-  v === 0 ? 'none' : v >= 0.01 ? `${(v * 100).toFixed(1)}%` : `${(v * 100).toFixed(2)}%`;
-
 interface Card {
   title: string;
   /** Plain-language reading of the visual. */
   caption: string;
-  visual: SVGElement;
+  visual: Element;
   wide?: boolean;
   bad?: boolean;
 }
@@ -82,6 +75,12 @@ export function render(lut: Lut | null, subject = ''): void {
     })
     .join(' · ');
 
+  const lifted = m.blackPoint[0] > 0.02;
+  const heldBack = m.whitePoint[0] < 0.98;
+  const ends = document.createElement('div');
+  ends.className = 'acard-ends';
+  ends.append(swatchPair([0, 0, 0], m.blackPoint), swatchPair([1, 1, 1], m.whitePoint));
+
   const cards: Card[] = [
     {
       title: 'Grey ramp — input above, result below',
@@ -99,75 +98,29 @@ export function render(lut: Lut | null, subject = ''): void {
       wide: true,
     },
     {
-      title: 'Where it moves each tone',
-      caption: 'above the line is brighter, below is darker',
-      visual: liftBars(lut),
-      wide: true,
-    },
-    {
       title: 'Tone curve',
       caption: `${m.midSlope.toFixed(2)}× at mid, against the dashed identity line`,
       visual: toneCurve(lut),
     },
     {
-      title: 'Colour cast',
-      caption: castWord(lut) + ' — shadows, mid, highlights',
-      visual: castBars(lut),
-    },
-    {
-      title: 'Black point',
-      caption: `black in → ${m.blackPoint.map((v) => v.toFixed(3)).join(' ')}${
-        m.blackPoint[0] > 0.02 ? ' — lifted' : ''
-      }`,
-      visual: swatchPair([0, 0, 0], m.blackPoint),
-    },
-    {
-      title: 'White point',
-      caption: `white in → ${m.whitePoint.map((v) => v.toFixed(3)).join(' ')}${
-        m.whitePoint[0] < 0.98 ? ' — held back' : ''
-      }`,
-      visual: swatchPair([1, 1, 1], m.whitePoint),
-    },
-    {
-      title: 'Highlights clipped',
-      caption:
-        m.clippedHigh > 0.02
-          ? `${pct(m.clippedHigh)} pinned at white — detail is gone`
-          : `${pct(m.clippedHigh)} pinned at white`,
-      visual: meter(m.clippedHigh),
-      bad: m.clippedHigh > 0.02,
-    },
-    {
-      title: 'Shadows crushed',
-      caption:
-        m.clippedLow > 0.02
-          ? `${pct(m.clippedLow)} pinned at black — detail is gone`
-          : `${pct(m.clippedLow)} pinned at black`,
-      visual: meter(m.clippedLow),
-      bad: m.clippedLow > 0.02,
+      title: 'Black · White',
+      caption: `black → ${m.blackPoint[0].toFixed(3)}${lifted ? ' lifted' : ''} · white → ${m.whitePoint[0].toFixed(3)}${heldBack ? ' held back' : ''}`,
+      visual: ends,
+      bad: m.clippedHigh > 0.02 || m.clippedLow > 0.02,
     },
   ];
 
   box.replaceChildren(...cards.map(buildCard));
-  renderChecks(checksBox, runChecks(lut, m));
+  // A missing TITLE is already obvious from the empty LUT Name field.
+  renderChecks(checksBox, runChecks(lut, m).filter((c) => c.code !== 'no-title'));
 }
 
-/** The read-aloud summary: a headline plus the supporting observations. */
-function renderSummary(summary: { headline: string; points: string[] }): void {
-  const box = $('analysisSummary');
+/** The one-sentence read of the look. */
+function renderSummary(summary: { headline: string }): void {
   const headline = document.createElement('p');
   headline.className = 'summary-headline';
   headline.textContent = summary.headline;
-
-  const list = document.createElement('ul');
-  list.className = 'summary-points';
-  for (const point of summary.points) {
-    const li = document.createElement('li');
-    li.textContent = point;
-    list.append(li);
-  }
-
-  box.replaceChildren(headline, list);
+  $('analysisSummary').replaceChildren(headline);
 }
 
 function buildCard(card: Card): HTMLElement {

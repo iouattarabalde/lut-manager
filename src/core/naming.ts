@@ -89,9 +89,51 @@ export function csToken(label: string): string {
  * table is asserted in test/naming.test.ts.
  */
 export function exposureToken(raw: string): string {
-  const n = parseFloat(raw);
-  if (!raw || raw === '0' || !Number.isFinite(n) || n === 0) return '';
-  return `${n > 0 ? '+' : '-'}E${String(Math.abs(n)).replace('.', '_')}stop`;
+  const n = parseStops(raw);
+  if (n === null) return '';
+  const canon = formatStops(n);
+  if (canon === '0') return '';
+  return `${canon[0]}E${canon.slice(1).replace('.', '_')}stop`;
+}
+
+/**
+ * Read an exposure shift however it was typed: `0.25`, `+1/4`, `-1 1/3`,
+ * `1.5 stops`, `+E0_25stop`. Returns null when it isn't a number of stops.
+ */
+export function parseStops(raw: string): number | null {
+  const s = raw.trim().replace(/\s*stops?$/i, '').replace(/^([+-]?)E/i, '$1').replace('_', '.');
+  if (!s) return 0;
+  const m = s.match(/^([+-])?\s*(?:(\d+(?:\.\d+)?)|(\d+)\s+(\d+)\/(\d+)|(\d+)\/(\d+))$/);
+  if (!m) return null;
+  let n: number;
+  if (m[2] !== undefined) n = parseFloat(m[2]);
+  else if (m[3] !== undefined) n = +m[3] + +m[4] / +m[5];
+  else n = +m[6] / +m[7];
+  if (!Number.isFinite(n)) return null;
+  return m[1] === '-' ? -n : n;
+}
+
+/**
+ * Canonical form of a shift, rounded to hundredths: `+0.25`, `-1.33`, `+2`,
+ * or `0` for none. This is what the header and the filename token are built
+ * from, so `1/3` and `0.333` land on the same `+E0_33stop`.
+ */
+export function formatStops(n: number): string {
+  const r = Math.round(n * 100) / 100;
+  if (r === 0) return '0';
+  return `${r > 0 ? '+' : '-'}${String(Math.abs(r))}`;
+}
+
+/** `parseStops` then `formatStops`; null when the input isn't valid. */
+export function normalizeStops(raw: string): string | null {
+  const n = parseStops(raw);
+  return n === null ? null : formatStops(n);
+}
+
+/** An exposure token left in a filename, e.g. `Warm_+E0_25stop.cube`. */
+export function stopsFromName(name: string): string {
+  const m = name.match(/([+-])E(\d+(?:_\d+)?)stop/);
+  return m ? formatStops(parseFloat(`${m[1]}${m[2].replace('_', '.')}`)) : '0';
 }
 
 /** As above, with the leading separator, for direct concatenation. */

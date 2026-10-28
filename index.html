@@ -116,40 +116,40 @@
         <div class="section-head">
           <span class="section-num">02</span>
           <span class="section-title">Shared Header</span>
-          <span class="section-key">stamped on every file</span>
+          <span class="section-key">untick a field to vary it per file</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-          <div class="field">
-            <label>Author <span class="lkey">// #</span></label>
+          <div class="field" data-field="author">
+            <div class="field-head"><label for="bAuthor">Author <span class="lkey">// #</span></label><label class="share" title="Same value stamped on every file. Untick to set it per file in the queue."><input type="checkbox" data-share="author" checked><span>All</span></label></div>
             <input type="text" id="bAuthor" placeholder="e.g. Jane Smith">
           </div>
-          <div class="field">
-            <label>Date <span class="lkey">// #</span></label>
+          <div class="field" data-field="date">
+            <div class="field-head"><label for="bDate">Date <span class="lkey">// #</span></label><label class="share" title="Same value stamped on every file. Untick to set it per file in the queue."><input type="checkbox" data-share="date" checked><span>All</span></label></div>
             <input type="text" id="bDate">
           </div>
-          <div class="field">
-            <label>Project <span class="lkey">// #</span></label>
+          <div class="field" data-field="project">
+            <div class="field-head"><label for="bProject">Project <span class="lkey">// #</span></label><label class="share" title="Same value stamped on every file. Untick to set it per file in the queue."><input type="checkbox" data-share="project" checked><span>All</span></label></div>
             <input type="text" id="bProject" placeholder="e.g. Nike Canada">
           </div>
-          <div class="field">
-            <label>Exposure Shift <span class="lkey">// ExposureShift</span></label>
-            <select id="bExpShift"></select>
+          <div class="field" data-field="expShift">
+            <div class="field-head"><label for="bExpShift">Exposure Shift <span class="lkey">// ExposureShift</span></label><label class="share" title="Same value stamped on every file. Untick to set it per file in the queue."><input type="checkbox" data-share="expShift" checked><span>All</span></label></div>
+            <input type="text" id="bExpShift" inputmode="decimal">
           </div>
         </div>
-        <div class="field">
-          <label>Notes <span class="lkey">// #</span></label>
+        <div class="field" data-field="notes">
+          <div class="field-head"><label for="bNotes">Notes <span class="lkey">// #</span></label><label class="share" title="Same value stamped on every file. Untick to set it per file in the queue."><input type="checkbox" data-share="notes" checked><span>All</span></label></div>
           <textarea id="bNotes" rows="2" placeholder="Applied to every file in the queue"></textarea>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
-          <div class="field">
-            <label>Input Color Space <span class="lkey">// InputColorSpace</span></label>
+          <div class="field" data-field="inputCS">
+            <div class="field-head"><label for="bInputCS">Input Color Space <span class="lkey">// InputColorSpace</span></label><label class="share" title="Same value stamped on every file. Untick to set it per file in the queue."><input type="checkbox" data-share="inputCS" checked><span>All</span></label></div>
             <select id="bInputCS"></select>
             <div class="custom-input-wrapper" id="bInputCSWrap">
               <input type="text" id="bInputCSCustom" placeholder="Custom color space">
             </div>
           </div>
-          <div class="field">
-            <label>Output Color Space <span class="lkey">// OutputColorSpace</span></label>
+          <div class="field" data-field="outputCS">
+            <div class="field-head"><label for="bOutputCS">Output Color Space <span class="lkey">// OutputColorSpace</span></label><label class="share" title="Same value stamped on every file. Untick to set it per file in the queue."><input type="checkbox" data-share="outputCS" checked><span>All</span></label></div>
             <select id="bOutputCS"></select>
             <div class="custom-input-wrapper" id="bOutputCSWrap">
               <input type="text" id="bOutputCSCustom" placeholder="Custom color space">
@@ -237,10 +237,10 @@
         </div>
         <div class="field">
           <label>Exposure Shift <span class="lkey">// ExposureShift</span></label>
-          <select id="fieldExpShift"></select>
+          <input type="text" id="fieldExpShift" inputmode="decimal">
           <div class="field-note">
             <strong>Annotation only.</strong>
-            <span>Records a shift applied elsewhere &mdash; the LUT data is not modified.</span>
+            <span>Any value in stops &mdash; <code>+0.25</code>, <code>-1/4</code>, <code>+1 1/3</code>. Records a shift applied elsewhere; the LUT data is not modified.</span>
           </div>
         </div>
         <div class="field">

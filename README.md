@@ -11,7 +11,8 @@ convert between formats. Everything runs client-side — LUTs never leave the br
 Drop in a `.cube` file — 1D or 3D — and edit its header fields:
 
 - **Identity** — `TITLE`, LUT name, author, date, project, notes
-- **Exposure shift** — stop increments from -3 to +3, also appended to the filename.
+- **Exposure shift** — any value in stops, typed as a decimal or a fraction (`+0.25`, `-1/4`,
+  `+1 1/3`), with quarter and third stops offered as suggestions. Also appended to the filename.
   This is an **annotation only**: it records a shift applied elsewhere and never modifies
   the LUT data.
 - **Color space** — `InputColorSpace` / `OutputColorSpace`, with presets for ARRI LogC3/C4,
@@ -84,9 +85,10 @@ grades completely wrong, so each writer's ordering is asserted in `test/exporter
 
 ## Analysis
 
-A readout of black, white and mid points, contrast slope at mid, clipped fractions, maximum
-deviation from identity, neutral monotonicity, and whether the LUT is genuinely 3D or
-reducible to 1D — alongside the same checks batch mode runs.
+One sentence on what the look does, then four visuals: a grey ramp before and after, the
+shadows / midtones / highlights swatches, the tone curve against identity, and where black and
+white land. Clipping, a reversing curve, odd sizes and a LUT reducible to 1D show up as checks
+below, only when they apply — the same checks batch mode runs.
 
 The **Cube** tab plots the LUT's output positions in RGB space as an orbitable point cloud
 inside a wireframe of the input domain. Gamut warping, clipping (points pinned flat against a
@@ -100,7 +102,9 @@ for comparison.
 Drop several `.cube` files at once to switch into batch mode — the "shipping a look package"
 workflow:
 
-- **One shared header** stamped across every file, with a per-file look name.
+- **A shared header** stamped across every file, with a per-file look name. Untick **All** on
+  any field to set it per file instead: each queue row then gets its own input, seeded from
+  that file's header (exposure also reads a `+E0_25stop` token in the filename).
 - **Delivery QC** on load. Each file gets a status dot and its worst problem inline: row
   counts that disagree with the declared size, clipped highlights or crushed shadows, a
   non-monotonic neutral axis, identity LUTs that do nothing, 3D LUTs doing no cross-channel

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { makeEntry, outputPath, renderBatch, worstLevel, type BatchEntry, type BatchSettings, type SharedFields } from '../src/batch/batch.js';
+import { FIELD_KEYS, makeEntry, outputPath, renderBatch, resolveFields, worstLevel, type BatchEntry, type BatchSettings, type SharedFields } from '../src/batch/batch.js';
 import { DEFAULT_TEMPLATE } from '../src/core/naming.js';
 import { parseCube } from '../src/format/cube.js';
 import { cube3d, identityRows } from './fixtures.js';
@@ -104,5 +104,24 @@ describe('render', () => {
     const files = renderBatch(entries, shared, settings);
     expect(files.size).toBe(2);
     expect([...files.keys()].some((k) => k.endsWith('_02.cube'))).toBe(true);
+  });
+});
+
+describe('per-file fields', () => {
+  it('keeps each file its own value for fields that are not shared', async () => {
+    const entries: BatchEntry[] = [
+      await makeEntry(fileOf('Warm_+E0_25stop.cube', cube3d(3, ['TITLE "Warm"']))),
+      await makeEntry(fileOf('Warm_-E0_5stop.cube', cube3d(3, ['TITLE "Warm"']))),
+    ];
+    expect(entries[0].own.expShift).toBe('+0.25');
+    expect(entries[1].own.expShift).toBe('-0.5');
+
+    const keys = new Set(FIELD_KEYS.filter((k) => k !== 'expShift'));
+    const files = [...renderBatch(entries, shared, { ...settings, useFolders: false }, keys).keys()];
+    expect(files).toEqual([
+      'Warm_ArriLogC4_Rec709_+E0_25stop.cube',
+      'Warm_ArriLogC4_Rec709_-E0_5stop.cube',
+    ]);
+    expect(resolveFields(entries[0], shared, keys).author).toBe('Ismael Ouattara');
   });
 });

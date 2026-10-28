@@ -7,8 +7,11 @@ import { zipSync, strToU8 } from 'fflate';
 import {
   type BatchEntry,
   type BatchSettings,
+  type FieldKey,
   type SharedFields,
+  FIELD_KEYS,
   makeEntry,
+  resolveFields,
   outputPath,
   renderBatch,
   stamp,
@@ -22,7 +25,7 @@ import { renderThumbnail } from '../render/offscreen.js';
 import { CHARTS, type ChartId, renderChart } from '../render/charts.js';
 import { stillSource } from './preview-view.js';
 import { encodingForColorSpace, type EncodingId } from '../render/transfer.js';
-import { populateCS, populateExposure } from './colorspaces.js';
+import { csListId, exposureValue, populateCS, wireExposure } from './colorspaces.js';
 
 const PREFS_KEY = 'lut-editor/batch-prefs';
 
@@ -31,6 +34,20 @@ let onEmpty: () => void = () => {};
 let onSelect: (entry: BatchEntry | null) => void = () => {};
 let selectedId: string | null = null;
 
+/** Fields stamped identically on every file; the rest come from each entry. */
+const sharedKeys = new Set<FieldKey>(FIELD_KEYS);
+
+/** Short labels for the per-file inputs in a queue row. */
+const OWN_LABELS: Record<FieldKey, string> = {
+  author: 'Author',
+  date: 'Date',
+  project: 'Project',
+  notes: 'Notes',
+  expShift: 'Exposure',
+  inputCS: 'Input CS',
+  outputCS: 'Output CS',
+};
+
 /** Fields worth remembering between sessions, so they aren't retyped. */
 interface Prefs {
   author: string;
@@ -38,6 +55,8 @@ interface Prefs {
   template: string;
   lookKind: LookKind;
   useFolders: boolean;
+  /** Fields last set per file rather than shared. */
+  perFile: FieldKey[];
 }
 
 function loadPrefs(): Partial<Prefs> {
@@ -56,6 +75,7 @@ function savePrefs(): void {
       template: val('bTemplate'),
       lookKind: $<HTMLSelectElement>('bLookKind').value as LookKind,
       useFolders: $<HTMLInputElement>('bFolders').checked,
+      perFile: FIELD_KEYS.filter((k) => !sharedKeys.has(k)),
     };
     localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
   } catch {
@@ -71,7 +91,7 @@ function customCS(dir: 'Input' | 'Output'): string {
 }
 
 function shared(): SharedFields {
-  const exp = $<HTMLSelectElement>('bExpShift').value;
+  const exp = exposureValue($<HTMLInputElement>('bExpShift'));
   return {
     author: val('bAuthor'),
     date: val('bDate'),
@@ -148,11 +168,13 @@ function renderQueue(): void {
     if (entry.id === selectedId) row.classList.add('selected');
     row.addEventListener('click', (e) => {
       // The look field and the include toggle have their own behaviour.
-      if ((e.target as HTMLElement).closest('.qrow-look, .qrow-toggle')) return;
+      if ((e.target as HTMLElement).closest('.qrow-look, .qrow-toggle, .qrow-own')) return;
       select(entry.id);
     });
 
     row.append(dot, main, look, toggle);
+    const own = ownFields(entry);
+    if (own) row.append(own);
     queue.append(row);
   }
 
@@ -160,6 +182,73 @@ function renderQueue(): void {
   const errors = entries.filter((e) => worstLevel(e) === 'error').length;
   $('batchCount').textContent =
     `${included} of ${entries.length} selected${errors ? ` · ${errors} with errors` : ''}`;
+}
+
+/** Inputs for the fields this batch sets per file, or null when all are shared. */
+function ownFields(entry: BatchEntry): HTMLElement | null {
+  const keys = FIELD_KEYS.filter((k) => !sharedKeys.has(k));
+  if (!keys.length) return null;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'qrow-own';
+  for (const key of keys) {
+    const field = document.createElement('label');
+    field.className = `qrow-own-field qrow-own-${key}`;
+    const tag = document.createElement('span');
+    tag.textContent = OWN_LABELS[key];
+    const input = document.createElement('input');
+    input.className = 'qrow-look';
+
+    if (key === 'expShift') {
+      input.value = entry.own.expShift === '0' ? '' : entry.own.expShift;
+      wireExposure(input, () => {
+        entry.own.expShift = exposureValue(input);
+        renderPreview();
+      });
+      input.placeholder = '0';
+    } else {
+      input.value = entry.own[key];
+      if (key === 'inputCS' || key === 'outputCS') input.setAttribute('list', csListId());
+      input.addEventListener('input', () => {
+        entry.own[key] = input.value.trim();
+        renderPreview();
+      });
+    }
+    field.append(tag, input);
+    wrap.append(field);
+  }
+  return wrap;
+}
+
+/** Reflect `sharedKeys` on the Shared Header fields. */
+function syncShareUI(): void {
+  for (const box of document.querySelectorAll<HTMLInputElement>('[data-share]')) {
+    const key = box.dataset.share as FieldKey;
+    const on = sharedKeys.has(key);
+    box.checked = on;
+    (box.nextElementSibling as HTMLElement).textContent = on ? 'All' : 'Per file';
+    const field = box.closest<HTMLElement>('.field')!;
+    field.classList.toggle('per-file', !on);
+    field
+      .querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+        ':scope > input, :scope > select, :scope > textarea, .custom-input-wrapper input',
+      )
+      .forEach((el) => (el.disabled = !on));
+  }
+}
+
+function setShared(key: FieldKey, on: boolean): void {
+  if (on) sharedKeys.add(key);
+  else {
+    sharedKeys.delete(key);
+    // Files whose header had nothing for this field start from the shared value.
+    const fallback = shared()[key];
+    for (const entry of entries) {
+      if (!entry.own[key] || (key === 'expShift' && entry.own[key] === '0')) entry.own[key] = fallback;
+    }
+  }
+  syncShareUI();
+  refresh();
 }
 
 function select(id: string | null): void {
@@ -175,7 +264,7 @@ function renderPreview(): void {
   const included = entries.filter((e) => e.included);
 
   const lines = included.map((entry, i) => {
-    const path = outputPath(entry, s, set, i);
+    const path = outputPath(entry, resolveFields(entry, s, sharedKeys), set, i);
     const cut = path.lastIndexOf('/');
     const dir = cut === -1 ? '' : path.slice(0, cut + 1);
     const file = cut === -1 ? path : path.slice(cut + 1);
@@ -194,6 +283,11 @@ function renderPreview(): void {
 function refresh(): void {
   renderQueue();
   renderPreview();
+}
+
+/** Re-announce the selected entry, e.g. once the viz panel has a size to draw into. */
+export function reselect(): void {
+  onSelect(entries.find((e) => e.id === selectedId) ?? null);
 }
 
 export function isActive(): boolean {
@@ -219,7 +313,7 @@ export function clear(): void {
 }
 
 function exportZip(): void {
-  const files = renderBatch(entries, shared(), settings());
+  const files = renderBatch(entries, shared(), settings(), sharedKeys);
   if (!files.size) {
     toast('Nothing selected to export');
     return;
@@ -271,8 +365,6 @@ function exportLookSheet(): void {
   }
 
   const s = shared();
-  // Preview each look through the encoding its declared input space implies.
-  const encoding: EncodingId = encodingForColorSpace(s.inputCS) ?? 'linear';
 
   const W = 480;
   const H = 270;
@@ -294,7 +386,10 @@ function exportLookSheet(): void {
 
   const tiles: LookSheetTile[] = [];
   for (const entry of included) {
-    stamp(entry, s);
+    const fields = resolveFields(entry, s, sharedKeys);
+    stamp(entry, fields);
+    // Preview each look through the encoding its declared input space implies.
+    const encoding: EncodingId = encodingForColorSpace(fields.inputCS) ?? 'linear';
     const image = renderThumbnail(entry.lut, { linear }, encoding, W, H);
     if (!image) {
       toast('The look sheet needs WebGL2, which this browser did not provide');
@@ -302,7 +397,10 @@ function exportLookSheet(): void {
     }
     tiles.push({ entry, image });
   }
-  const html = buildLookSheet(tiles, s, label);
+  // The sheet header only states what every look shares.
+  const common = { ...s };
+  for (const key of FIELD_KEYS) if (!sharedKeys.has(key)) common[key] = '';
+  const html = buildLookSheet(tiles, common, label);
   const stem = val('bProject')
     ? val('bProject').replace(/[^A-Za-z0-9]+/g, '')
     : 'LookSheet';
@@ -317,7 +415,6 @@ export function init(
   onEmpty = onEmptyCallback;
   onSelect = onSelectCallback;
 
-  populateExposure($<HTMLSelectElement>('bExpShift'));
   populateCS($<HTMLSelectElement>('bInputCS'), 'Input');
   populateCS($<HTMLSelectElement>('bOutputCS'), 'Output');
 
@@ -332,6 +429,13 @@ export function init(
   const folders = $<HTMLInputElement>('bFolders');
   folders.checked = prefs.useFolders ?? true;
   syncFoldersToggle();
+
+  for (const key of prefs.perFile ?? []) if (FIELD_KEYS.includes(key)) sharedKeys.delete(key);
+  syncShareUI();
+  for (const box of document.querySelectorAll<HTMLInputElement>('[data-share]')) {
+    box.addEventListener('change', () => setShared(box.dataset.share as FieldKey, box.checked));
+  }
+  wireExposure($<HTMLInputElement>('bExpShift'), renderPreview);
 
   (['Input', 'Output'] as const).forEach((dir) => {
     $<HTMLSelectElement>(`b${dir}CS`).addEventListener('change', function (this: HTMLSelectElement) {
@@ -348,7 +452,7 @@ export function init(
   ['bAuthor', 'bDate', 'bProject', 'bNotes', 'bTemplate', 'bInputCSCustom', 'bOutputCSCustom'].forEach(
     (id) => $(id).addEventListener('input', renderPreview),
   );
-  ['bExpShift', 'bLookKind'].forEach((id) => $(id).addEventListener('change', renderPreview));
+  $('bLookKind').addEventListener('change', renderPreview);
 
   folders.addEventListener('change', () => {
     syncFoldersToggle();

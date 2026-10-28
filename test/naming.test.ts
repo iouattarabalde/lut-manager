@@ -6,6 +6,8 @@ import {
   DEFAULT_TEMPLATE,
   exposureSuffix,
   exposureToken,
+  normalizeStops,
+  stopsFromName,
   libraryFolder,
   pascalCase,
 } from '../src/core/naming.js';
@@ -113,5 +115,32 @@ describe('library folders', () => {
   it('falls back to Utility when the pairing is unknown', () => {
     expect(libraryFolder('ACEScg', 'Rec709')).toBe('LUTs/Utility');
     expect(libraryFolder('', 'Rec709')).toBe('LUTs/Utility');
+  });
+});
+
+describe('free-form exposure', () => {
+  it('reads decimals, fractions and mixed numbers', () => {
+    expect(normalizeStops('0.25')).toBe('+0.25');
+    expect(normalizeStops('+1/4')).toBe('+0.25');
+    expect(normalizeStops('-1/4')).toBe('-0.25');
+    expect(normalizeStops('1 1/3')).toBe('+1.33');
+    expect(normalizeStops('-2 2/3')).toBe('-2.67');
+    expect(normalizeStops('+1.5 stops')).toBe('+1.5');
+    expect(normalizeStops('-E0_25stop')).toBe('-0.25');
+    expect(normalizeStops('')).toBe('0');
+    expect(normalizeStops('0')).toBe('0');
+    expect(normalizeStops('abc')).toBeNull();
+  });
+
+  it('builds the filename token from any spelling', () => {
+    expect(exposureToken('+1/4')).toBe('+E0_25stop');
+    expect(exposureToken('-0.75')).toBe('-E0_75stop');
+    expect(exposureToken('1/3')).toBe('+E0_33stop');
+  });
+
+  it('recovers a shift from a filename', () => {
+    expect(stopsFromName('Warm_ArriLogC4_Rec709_+E0_25stop.cube')).toBe('+0.25');
+    expect(stopsFromName('Warm_-E1stop.cube')).toBe('-1');
+    expect(stopsFromName('Warm.cube')).toBe('0');
   });
 });

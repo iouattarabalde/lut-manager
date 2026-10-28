@@ -27,11 +27,12 @@
       --text-dim: #9a948a;
       --text-faint: #6b6660;
     }
-    .drop-zone:hover, .drop-zone.drag-over { background: #241f1d; }
-    .issue-error, .check-error   { background: #2a1c18; }
-    .issue-warning, .check-warning, .ops-banner { background: #2a2418; }
-    .check-info { background: #1a2027; }
-    .qrow.selected { background: #1c2329; }
+    /* :root raises specificity over the light rules further down the file. */
+    :root .drop-zone:hover, :root .drop-zone.drag-over { background: #241f1d; }
+    :root .issue-error, :root .check-error { background: #2a1c18; }
+    :root .issue-warning, :root .check-warning, :root .ops-banner { background: #2a2418; }
+    :root .check-info { background: #1a2027; }
+    :root .qrow.selected { background: #1c2329; }
     .file-pill { background: var(--surface2); color: var(--text); }
     .pill-clear { color: var(--text); }
     .toast { background: var(--surface2); color: var(--text); }
@@ -430,6 +431,36 @@
   }
   .qrow-toggle:hover { color: var(--text); }
 
+  /* Per-file values for fields the batch doesn't share. */
+  .qrow-own {
+    grid-column: 2 / -1;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 6px; padding-top: 2px; cursor: default;
+  }
+  .qrow-own-field { display: flex; flex-direction: column; gap: 3px; }
+  .qrow-own-field > span {
+    font-family: 'IBM Plex Mono', monospace; font-size: 8.5px;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint);
+  }
+  .qrow-own-notes, .qrow-own-inputCS, .qrow-own-outputCS { grid-column: span 2; }
+
+  /* Shared Header: the "same for all" switch beside each label. */
+  .field-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .field .field-head > label:first-child { flex-wrap: wrap; row-gap: 1px; min-width: 0; }
+  .field .field-head .lkey { white-space: nowrap; }
+  .field .field-head label.share {
+    margin-left: auto; gap: 5px; cursor: pointer; font-size: 9px;
+    letter-spacing: 0.06em; color: var(--text-faint); white-space: nowrap;
+  }
+  .field .field-head label.share input {
+    width: auto; padding: 0; margin: 0; appearance: auto; -webkit-appearance: auto;
+    accent-color: var(--accent2); cursor: pointer; align-self: center;
+  }
+  .field.per-file .field-head label.share { color: var(--accent2); }
+  .field.per-file > input, .field.per-file > select, .field.per-file > textarea,
+  .field.per-file .custom-input-wrapper { opacity: 0.4; }
+  .field input.invalid { border-color: var(--accent); }
+
   .preview-box .pp { color: #8a9a8a; }
   .preview-box .pf { color: #ffd486; }
   .preview-box .pd { color: #ff9d7d; }
@@ -604,18 +635,6 @@
     font-size: 19px; font-weight: 600; line-height: 1.3;
     letter-spacing: 0.01em; color: var(--text); margin-bottom: 8px;
   }
-  .summary-points {
-    list-style: none; display: flex; flex-direction: column; gap: 4px;
-  }
-  .summary-points li {
-    font-family: 'IBM Plex Mono', monospace; font-size: 10.5px;
-    line-height: 1.55; color: var(--text-dim);
-    padding-left: 13px; position: relative;
-  }
-  .summary-points li::before {
-    content: '—'; position: absolute; left: 0; color: var(--accent); opacity: 0.7;
-  }
-
   .metrics {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
     gap: 10px;
@@ -639,6 +658,8 @@
     line-height: 1.45; color: var(--text-dim);
   }
   .acard-bad .acard-caption { color: #a87d15; }
+  .acard-ends { display: flex; gap: 12px; width: 100%; }
+  .acard-ends svg { flex: 1; }
 
   .checks { margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
   .checks:empty { display: none; }

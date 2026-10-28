@@ -3,6 +3,8 @@
  * panel so the two can never drift apart.
  */
 
+import { formatStops, normalizeStops } from '../core/naming.js';
+
 export interface CSGroup {
   label: string;
   options: string[];
@@ -69,21 +71,6 @@ export const OUTPUT_GROUPS: CSGroup[] = [
   { label: 'Camera', options: INPUT_GROUPS[0].options },
 ];
 
-export const EXPOSURE_STOPS: { value: string; label: string }[] = [
-  { value: '+0.33', label: '+1/3' },
-  { value: '+0.5', label: '+1/2' },
-  { value: '+0.67', label: '+2/3' },
-  { value: '+1', label: '+1' },
-  { value: '+1.33', label: '+1 1/3' },
-  { value: '+1.5', label: '+1 1/2' },
-  { value: '+1.67', label: '+1 2/3' },
-  { value: '+2', label: '+2' },
-  { value: '+2.33', label: '+2 1/3' },
-  { value: '+2.5', label: '+2 1/2' },
-  { value: '+2.67', label: '+2 2/3' },
-  { value: '+3', label: '+3' },
-];
-
 const opt = (value: string, label = value): HTMLOptionElement =>
   Object.assign(document.createElement('option'), { value, textContent: label });
 
@@ -102,19 +89,73 @@ export function populateCS(sel: HTMLSelectElement, dir: 'Input' | 'Output'): voi
   sel.append(opt('__custom__', 'Custom…'));
 }
 
-/** Fill a <select> with the exposure-shift list. */
-export function populateExposure(sel: HTMLSelectElement): void {
-  sel.replaceChildren();
-  sel.append(opt('0', '0 (no shift)'));
+/** Quarter and third stops out to ±3, offered as suggestions; any value can be typed. */
+const FRACTIONS: [number, string][] = [
+  [0.25, '1/4'], [1 / 3, '1/3'], [0.5, '1/2'], [2 / 3, '2/3'], [0.75, '3/4'],
+];
 
-  const positive = document.createElement('optgroup');
-  positive.label = 'Positive';
-  const negative = document.createElement('optgroup');
-  negative.label = 'Negative';
-
-  for (const { value, label } of EXPOSURE_STOPS) {
-    positive.append(opt(value, label));
-    negative.append(opt(value.replace('+', '-'), label.replace('+', '-')));
+function exposureSuggestions(): { value: string; label: string }[] {
+  const out: { value: string; label: string }[] = [];
+  for (const sign of [1, -1]) {
+    for (let whole = 0; whole <= 3; whole++) {
+      const steps: [number, string][] = whole === 0 ? FRACTIONS : [[0, ''], ...(whole < 3 ? FRACTIONS : [])];
+      for (const [f, frac] of steps) {
+        const n = sign * (whole + f);
+        const s = sign > 0 ? '+' : '-';
+        out.push({ value: formatStops(n), label: `${s}${whole ? whole : ''}${whole && frac ? ' ' : ''}${frac}` });
+      }
+    }
   }
-  sel.append(positive, negative);
+  return out;
+}
+
+/** One shared <datalist> per page, created on first use. */
+function datalist(id: string, fill: (list: HTMLDataListElement) => void): string {
+  if (!document.getElementById(id)) {
+    const list = document.createElement('datalist');
+    list.id = id;
+    fill(list);
+    document.body.append(list);
+  }
+  return id;
+}
+
+/**
+ * Turn a text input into an exposure-shift field. Takes `0.25`, `+1/4`,
+ * `-1 1/3` and so on; normalises on commit and flags anything unreadable.
+ */
+export function wireExposure(input: HTMLInputElement, onChange: () => void): void {
+  input.setAttribute(
+    'list',
+    datalist('expStopsList', (list) => {
+      for (const { value, label } of exposureSuggestions()) list.append(opt(value, label));
+    }),
+  );
+  input.autocomplete = 'off';
+  input.placeholder = '0 — e.g. +1/4, -0.5, +1 1/3';
+  input.addEventListener('input', () => {
+    input.classList.toggle('invalid', normalizeStops(input.value) === null);
+    onChange();
+  });
+  input.addEventListener('change', () => {
+    const canon = normalizeStops(input.value);
+    if (canon === null) return;
+    input.value = canon === '0' ? '' : canon;
+    input.classList.remove('invalid');
+    onChange();
+  });
+}
+
+/** The value of an exposure field in canonical form, `0` when empty or invalid. */
+export function exposureValue(input: HTMLInputElement): string {
+  return normalizeStops(input.value) ?? '0';
+}
+
+/** A datalist of every preset color space, for free-text color space inputs. */
+export function csListId(): string {
+  return datalist('csList', (list) => {
+    const seen = new Set<string>();
+    for (const g of [...INPUT_GROUPS, ...OUTPUT_GROUPS])
+      for (const o of g.options) if (!seen.has(o)) (seen.add(o), list.append(opt(o)));
+  });
 }

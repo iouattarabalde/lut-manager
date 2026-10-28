@@ -13,7 +13,9 @@ import {
   csToken,
   exposureToken,
   libraryFolder,
+  normalizeStops,
   pascalCase,
+  stopsFromName,
 } from '../core/naming.js';
 
 export interface BatchEntry {
@@ -28,9 +30,14 @@ export interface BatchEntry {
   look: string;
   /** Excluded from export when false. */
   included: boolean;
+  /**
+   * This file's own values, used for any field not shared across the batch.
+   * Seeded from its header (exposure falls back to a token in the filename).
+   */
+  own: SharedFields;
 }
 
-/** Header fields stamped identically across the whole batch. */
+/** Header fields stamped on each file — shared across the batch or per file. */
 export interface SharedFields {
   author: string;
   date: string;
@@ -39,6 +46,26 @@ export interface SharedFields {
   expShift: string;
   inputCS: string;
   outputCS: string;
+}
+
+export type FieldKey = keyof SharedFields;
+
+export const FIELD_KEYS: readonly FieldKey[] = [
+  'author', 'date', 'project', 'notes', 'expShift', 'inputCS', 'outputCS',
+];
+
+/**
+ * The fields one entry is written with: shared values for the keys in
+ * `sharedKeys`, the entry's own values for the rest.
+ */
+export function resolveFields(
+  entry: BatchEntry,
+  shared: SharedFields,
+  sharedKeys: ReadonlySet<FieldKey> = new Set(FIELD_KEYS),
+): SharedFields {
+  const out = { ...shared };
+  for (const key of FIELD_KEYS) if (!sharedKeys.has(key)) out[key] = entry.own[key];
+  return out;
 }
 
 export interface BatchSettings {
@@ -70,6 +97,16 @@ export async function makeEntry(file: File): Promise<BatchEntry> {
     metrics,
     look: lut.meta.title || file.name.replace(/\.[^.]+$/, ''),
     included: true,
+    own: {
+      author: lut.meta.author,
+      date: lut.meta.date,
+      project: lut.meta.project,
+      notes: lut.meta.notes,
+      expShift:
+        (lut.meta.expShift && normalizeStops(lut.meta.expShift)) || stopsFromName(file.name),
+      inputCS: lut.meta.inputCS,
+      outputCS: lut.meta.outputCS,
+    },
   };
 }
 
@@ -78,7 +115,7 @@ export async function makeEntry(file: File): Promise<BatchEntry> {
  * Never touches sample data.
  */
 export function stamp(entry: BatchEntry, shared: SharedFields): void {
-  const exp = shared.expShift;
+  const exp = normalizeStops(shared.expShift) ?? '0';
   entry.lut.meta = {
     title: entry.look,
     author: shared.author,
@@ -138,13 +175,15 @@ export function renderBatch(
   entries: BatchEntry[],
   shared: SharedFields,
   settings: BatchSettings,
+  sharedKeys?: ReadonlySet<FieldKey>,
 ): Map<string, string> {
   const out = new Map<string, string>();
   const included = entries.filter((e) => e.included);
 
   included.forEach((entry, i) => {
-    stamp(entry, shared);
-    let path = outputPath(entry, shared, settings, i);
+    const fields = resolveFields(entry, shared, sharedKeys);
+    stamp(entry, fields);
+    let path = outputPath(entry, fields, settings, i);
     if (out.has(path)) {
       const dot = path.lastIndexOf('.');
       const stem = path.slice(0, dot);
